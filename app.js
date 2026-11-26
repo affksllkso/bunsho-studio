@@ -758,4 +758,11 @@
   el.inputText.value = SAMPLE_TEXT;
   updateCharCount();
   runCheck(true);
+
+  // Launch Splash fade-out
+  const splash = $('splashScreen');
+  if (splash) {
+    setTimeout(() => splash.classList.add('fade-out'), 520);
+    setTimeout(() => splash.remove(), 920);
+  }
 })();

@@ -1,25 +1,31 @@
 {
-  "name": "文脈工房 — 日本語文章スタジオ",
-  "short_name": "文脈工房",
-  "description": "AI文体チェック・Word/PDF読み込み・人間らしい自然な日本語へのリライトPWA",
+  "name": "SCRIPT LAB",
+  "short_name": "SCRIPT LAB",
+  "description": "文章の分析・リライト・文体学習を備えた日本語文章編集ツール。",
   "start_url": "./",
   "scope": "./",
   "display": "standalone",
-  "background_color": "#13141F",
-  "theme_color": "#13141F",
+  "background_color": "#101B26",
+  "theme_color": "#101B26",
   "lang": "ja",
   "icons": [
     {
       "src": "./icon-192.png",
       "sizes": "192x192",
       "type": "image/png",
-      "purpose": "any maskable"
+      "purpose": "any"
     },
     {
       "src": "./icon-512.png",
       "sizes": "512x512",
       "type": "image/png",
-      "purpose": "any maskable"
+      "purpose": "any"
+    },
+    {
+      "src": "./icon-maskable-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
     },
     {
       "src": "./icon.svg",

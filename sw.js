@@ -1,4 +1,4 @@
-const CACHE_NAME = 'bunsho-studio-v3';
+const CACHE_NAME = 'bunsho-studio-v4';
 const ASSETS = [
   './',
   './index.html',
@@ -9,7 +9,9 @@ const ASSETS = [
   './manifest.json',
   './icon.svg',
   './icon-192.png',
-  './icon-512.png'
+  './icon-512.png',
+  './icon-maskable-512.png',
+  './apple-touch-icon.png'
 ];
 
 self.addEventListener('install', (event) => {
