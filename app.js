@@ -8,7 +8,43 @@
   const HISTORY_KEY = 'bunsho_kotobane_history_v1';
   const PROFILE_KEY = 'bunsho_kotobane_profiles_v1';
   const THEME_KEY = 'bunsho_kotobane_theme';
-  const API_KEY_STORAGE = 'bunsho_gemini_api_key';
+  const LEGACY_GEMINI_KEY = 'bunsho_gemini_api_key';
+  const AI_CONFIG_KEY = 'scriptlab_ai_config_v1';
+
+  const AI_PROVIDERS = {
+    gemini: {
+      name: 'Gemini',
+      keyLabel: 'Gemini API キー',
+      placeholder: 'AIza...',
+      defaultModel: 'gemini-2.0-flash',
+      note: 'Google AI Studio で取得した Gemini API キーを使用します。'
+    },
+    openai: {
+      name: 'ChatGPT',
+      keyLabel: 'OpenAI API キー',
+      placeholder: 'sk-...',
+      defaultModel: 'gpt-4o-mini',
+      note: 'OpenAI Platform で取得した API キーを使用します（例: gpt-4o-mini / gpt-4.1-mini / gpt-4o）。'
+    },
+    claude: {
+      name: 'Claude',
+      keyLabel: 'Anthropic API キー',
+      placeholder: 'sk-ant-...',
+      defaultModel: 'claude-3-5-sonnet-latest',
+      note: 'Anthropic Console で取得した API キーを使用します（ブラウザー直接接続ヘッダー対応）。'
+    }
+  };
+
+  let aiConfig = {
+    activeProvider: 'gemini',
+    keys: { gemini: '', openai: '', claude: '' },
+    models: {
+      gemini: AI_PROVIDERS.gemini.defaultModel,
+      openai: AI_PROVIDERS.openai.defaultModel,
+      claude: AI_PROVIDERS.claude.defaultModel
+    }
+  };
+  let editingProvider = 'gemini';
 
   const SAMPLE_TEXT = [
     '本記事では、現代社会におけるデジタル学習の役割について詳しく解説します。近年、オンライン教材の普及に伴い、学習方法の多様化への注目が集まっています。',
@@ -111,7 +147,10 @@
     iconMoon: $('iconMoon'),
     howToModal: $('howToModal'),
     apiModal: $('apiModal'),
+    apiKeyLabel: $('apiKeyLabel'),
     inputApiKey: $('inputApiKey'),
+    inputApiModel: $('inputApiModel'),
+    providerNote: $('providerNote'),
     toast: $('toast')
   };
 
@@ -350,12 +389,129 @@
     }
   }
 
-  // Optional Gemini API Rewrite
-  async function runGeminiRewrite() {
-    const apiKey = localStorage.getItem(API_KEY_STORAGE);
+  // AI Config (Gemini / ChatGPT / Claude)
+  function loadAiConfig() {
+    try {
+      const raw = localStorage.getItem(AI_CONFIG_KEY);
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        if (parsed.activeProvider && AI_PROVIDERS[parsed.activeProvider]) {
+          aiConfig.activeProvider = parsed.activeProvider;
+        }
+        aiConfig.keys = Object.assign({ gemini: '', openai: '', claude: '' }, parsed.keys || {});
+        aiConfig.models = Object.assign(
+          {
+            gemini: AI_PROVIDERS.gemini.defaultModel,
+            openai: AI_PROVIDERS.openai.defaultModel,
+            claude: AI_PROVIDERS.claude.defaultModel
+          },
+          parsed.models || {}
+        );
+      } else {
+        const legacy = localStorage.getItem(LEGACY_GEMINI_KEY);
+        if (legacy) aiConfig.keys.gemini = legacy;
+      }
+    } catch {}
+    editingProvider = aiConfig.activeProvider;
+  }
+
+  function saveAiConfig() {
+    try {
+      localStorage.setItem(AI_CONFIG_KEY, JSON.stringify(aiConfig));
+    } catch {}
+  }
+
+  function buildRewritePrompt(text) {
+    const presetLabel = el.optPreset.options[el.optPreset.selectedIndex].text;
+    const activeProfile = profiles.length > 0 ? profiles[0] : null;
+    const lines = [
+      'あなたは日本語の編集者です。以下の原稿からAI特有の定型句・翻訳調・過剰な装飾を取り除き、元の意味・主張・引用・専門用語・事実を保ったまま、人間が自然に書いた読みやすい日本語へ整えてください。',
+      `文体指定: ${presetLabel}`,
+      `変更度: ${el.optIntensity.value}/100`,
+      el.chkKeepQuotes.checked ? '引用（「…」『…』）と専門用語は改変せず維持してください。' : '',
+      el.chkRemoveMd.checked ? 'Markdownの太字(**)や機械的な箇条書きは自然な地の文へ整えてください。' : '',
+      el.chkVaryEndings.checked ? '同じ文末表現の連続を避け、自然なリズムにしてください。' : '',
+      (el.optPreset.value === 'profile' && activeProfile)
+        ? `参考にする自分の文体傾向: ${activeProfile.toneLabel}、平均文長 約${activeProfile.avgLen}字、よく使う文末 ${(activeProfile.topEndings || []).join('・')}`
+        : '',
+      '出力は書き直した本文のみを返し、解説や前置きは書かないでください。',
+      '',
+      '【原稿】',
+      text
+    ].filter(Boolean);
+    return lines.join('\n');
+  }
+
+  async function callExternalAiApi(provider, apiKey, model, prompt) {
+    if (provider === 'gemini') {
+      const m = model || AI_PROVIDERS.gemini.defaultModel;
+      const resp = await fetch(
+        `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(m)}:generateContent?key=${encodeURIComponent(apiKey)}`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }] })
+        }
+      );
+      if (!resp.ok) throw new Error(`Gemini API HTTP ${resp.status}`);
+      const data = await resp.json();
+      return data?.candidates?.[0]?.content?.parts?.[0]?.text?.trim() || '';
+    }
+
+    if (provider === 'openai') {
+      const m = model || AI_PROVIDERS.openai.defaultModel;
+      const resp = await fetch('https://api.openai.com/v1/chat/completions', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${apiKey}`
+        },
+        body: JSON.stringify({
+          model: m,
+          messages: [
+            { role: 'system', content: 'あなたは日本語の文章編集者です。指示に従い、書き直した本文のみを返してください。' },
+            { role: 'user', content: prompt }
+          ]
+        })
+      });
+      if (!resp.ok) throw new Error(`OpenAI API HTTP ${resp.status}`);
+      const data = await resp.json();
+      return data?.choices?.[0]?.message?.content?.trim() || '';
+    }
+
+    if (provider === 'claude') {
+      const m = model || AI_PROVIDERS.claude.defaultModel;
+      const resp = await fetch('https://api.anthropic.com/v1/messages', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-api-key': apiKey,
+          'anthropic-version': '2023-06-01',
+          'anthropic-dangerous-direct-browser-access': 'true'
+        },
+        body: JSON.stringify({
+          model: m,
+          max_tokens: 4096,
+          messages: [{ role: 'user', content: prompt }]
+        })
+      });
+      if (!resp.ok) throw new Error(`Claude API HTTP ${resp.status}`);
+      const data = await resp.json();
+      return (data?.content || []).map((b) => b.text || '').join('').trim();
+    }
+
+    throw new Error('未対応のプロバイダです');
+  }
+
+  async function runApiRewrite() {
+    const provider = aiConfig.activeProvider;
+    const apiKey = (aiConfig.keys[provider] || '').trim();
+    const model = (aiConfig.models[provider] || AI_PROVIDERS[provider].defaultModel).trim();
+    const pName = AI_PROVIDERS[provider].name;
     const text = el.inputText.value.trim();
+
     if (!apiKey) {
-      el.apiModal.classList.remove('hidden');
+      openApiModal(provider);
       return;
     }
     if (!text) {
@@ -365,46 +521,82 @@
 
     const beforeRes = window.BunshoEngine.detectAI(text);
     el.btnAiRewrite.disabled = true;
-    el.btnAiRewrite.textContent = 'リライト中…';
-
-    const presetLabel = el.optPreset.options[el.optPreset.selectedIndex].text;
-    const prompt = [
-      'あなたは日本語の編集者です。以下の原稿からAI特有の定型句・翻訳調・過剰な装飾を取り除き、元の意味・主張・引用・専門用語・事実を保ったまま、人間が自然に書いた読みやすい日本語へ整えてください。',
-      `文体指定: ${presetLabel}`,
-      `変更度: ${el.optIntensity.value}/100`,
-      '出力は書き直した本文のみを返し、解説や前置きは書かないでください。',
-      '',
-      text
-    ].join('\n');
+    el.btnAiRewrite.textContent = `${pName} でリライト中…`;
 
     try {
-      const resp = await fetch(
-        `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${encodeURIComponent(apiKey)}`,
-        {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }] })
-        }
-      );
-      if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
-      const data = await resp.json();
-      const rewritten = data?.candidates?.[0]?.content?.parts?.[0]?.text?.trim();
-      if (!rewritten) throw new Error('Empty');
+      const prompt = buildRewritePrompt(text);
+      const rewritten = await callExternalAiApi(provider, apiKey, model, prompt);
+      if (!rewritten) throw new Error('応答が空でした');
 
       el.outputText.value = rewritten;
       const afterRes = window.BunshoEngine.detectAI(rewritten);
-      el.rewriteDeltaBadge.textContent = `スコア ${beforeRes.score} → ${afterRes.score}`;
+      const diffPt = afterRes.score - beforeRes.score;
+      el.rewriteDeltaBadge.textContent = diffPt < 0
+        ? `スコア ${beforeRes.score} → ${afterRes.score}（${diffPt}pt改善）`
+        : `スコア ${beforeRes.score} → ${afterRes.score}`;
       el.rewriteDeltaBadge.classList.remove('hidden');
-      el.afterScoreCaption.textContent = `高度リライト後のAI文体スコア: ${afterRes.score} / 100（変換前 ${beforeRes.score}）`;
+      el.afterScoreCaption.textContent = `${pName} リライト後のAI文体スコア: ${afterRes.score} / 100（変換前 ${beforeRes.score}）`;
       el.diffCanvas.innerHTML = window.BunshoEngine.buildDiffHtml(text, rewritten);
+      el.changeCountBadge.textContent = '1';
+      el.changesList.innerHTML = `<li class="change-item"><div class="change-cat">高度AIリライト (${esc(pName)})</div><div>モデル ${esc(model)} を使用して文脈全体をより自然な日本語に整えました。</div></li>`;
+
+      saveHistoryEntry({
+        id: Date.now(),
+        createdAt: Date.now(),
+        beforeScore: beforeRes.score,
+        afterScore: afterRes.score,
+        input: text,
+        output: rewritten
+      });
+
       switchOutTab('result');
-      showToast(`高度AIリライト完了（スコア ${beforeRes.score} → ${afterRes.score}）`);
-    } catch {
-      showToast('Gemini APIでのリライトに失敗しました。キー設定や通信を確認してください。');
+      showToast(`${pName} リライト完了（スコア ${beforeRes.score} → ${afterRes.score}）`);
+    } catch (err) {
+      showToast(`${pName} APIでのリライトに失敗しました（${err.message || '通信・キー確認'}）`);
     } finally {
       el.btnAiRewrite.disabled = false;
-      el.btnAiRewrite.textContent = '高度AIリライト (Gemini)';
+      syncApiBtn();
     }
+  }
+
+  async function openWebAi(target) {
+    const text = el.inputText.value.trim();
+    if (!text) {
+      showToast('連携する原稿を先に入力してください');
+      return;
+    }
+    const prompt = buildRewritePrompt(text);
+    try {
+      await navigator.clipboard.writeText(prompt);
+    } catch {}
+
+    const encoded = encodeURIComponent(prompt.slice(0, 1800));
+    const url = target === 'chatgpt'
+      ? `https://chatgpt.com/?q=${encoded}`
+      : `https://claude.ai/new?q=${encoded}`;
+    window.open(url, '_blank', 'noopener,noreferrer');
+    showToast(`リライト用プロンプトをコピーし、${target === 'chatgpt' ? 'ChatGPT' : 'Claude'} を開きました`);
+  }
+
+  function renderApiModalProvider(provider) {
+    editingProvider = provider;
+    const meta = AI_PROVIDERS[provider];
+    document.querySelectorAll('.provider-tab').forEach((t) => {
+      const active = t.dataset.provider === provider;
+      t.classList.toggle('active', active);
+      t.setAttribute('aria-selected', String(active));
+    });
+    el.apiKeyLabel.textContent = meta.keyLabel;
+    el.inputApiKey.placeholder = meta.placeholder;
+    el.inputApiKey.value = aiConfig.keys[provider] || '';
+    el.inputApiModel.placeholder = meta.defaultModel;
+    el.inputApiModel.value = aiConfig.models[provider] || meta.defaultModel;
+    el.providerNote.textContent = meta.note;
+  }
+
+  function openApiModal(provider) {
+    renderApiModalProvider(provider || aiConfig.activeProvider);
+    el.apiModal.classList.remove('hidden');
   }
 
   // Export Helpers
@@ -533,7 +725,10 @@
   }
 
   function syncApiBtn() {
-    el.btnAiRewrite.classList.toggle('hidden', !localStorage.getItem(API_KEY_STORAGE));
+    const p = aiConfig.activeProvider;
+    const hasKey = Boolean((aiConfig.keys[p] || '').trim());
+    el.btnAiRewrite.classList.toggle('hidden', !hasKey);
+    el.btnAiRewrite.textContent = `高度AIリライト (${AI_PROVIDERS[p].name})`;
   }
 
   function bindEvents() {
@@ -595,7 +790,9 @@
     $('btnCheckStyle').addEventListener('click', () => runCheck(false));
     $('btnRewrite').addEventListener('click', () => runRewrite(false));
     $('btnRunRewrite2').addEventListener('click', () => runRewrite(false));
-    el.btnAiRewrite.addEventListener('click', runGeminiRewrite);
+    $('btnOpenChatGpt').addEventListener('click', () => openWebAi('chatgpt'));
+    $('btnOpenClaude').addEventListener('click', () => openWebAi('claude'));
+    el.btnAiRewrite.addEventListener('click', runApiRewrite);
     $('btnVariant').addEventListener('click', () => runRewrite(true));
 
     $('btnViewHighlights').addEventListener('click', () => {
@@ -785,29 +982,30 @@
     });
 
     $('btnHowTo').addEventListener('click', () => el.howToModal.classList.remove('hidden'));
-    $('btnApiSettings').addEventListener('click', () => {
-      el.inputApiKey.value = localStorage.getItem(API_KEY_STORAGE) || '';
-      el.apiModal.classList.remove('hidden');
+    $('btnApiSettings').addEventListener('click', () => openApiModal(aiConfig.activeProvider));
+
+    document.querySelectorAll('.provider-tab').forEach((tab) => {
+      tab.addEventListener('click', () => renderApiModalProvider(tab.dataset.provider));
     });
 
     $('btnSaveApiKey').addEventListener('click', () => {
       const k = el.inputApiKey.value.trim();
-      if (k) {
-        localStorage.setItem(API_KEY_STORAGE, k);
-        showToast('Gemini APIキーを保存しました');
-      } else {
-        localStorage.removeItem(API_KEY_STORAGE);
-      }
+      const m = el.inputApiModel.value.trim() || AI_PROVIDERS[editingProvider].defaultModel;
+      aiConfig.keys[editingProvider] = k;
+      aiConfig.models[editingProvider] = m;
+      aiConfig.activeProvider = editingProvider;
+      saveAiConfig();
       syncApiBtn();
       el.apiModal.classList.add('hidden');
+      showToast(k ? `${AI_PROVIDERS[editingProvider].name} のAPI設定を保存しました` : `${AI_PROVIDERS[editingProvider].name} を選択しました（キー未入力）`);
     });
 
     $('btnRemoveApiKey').addEventListener('click', () => {
-      localStorage.removeItem(API_KEY_STORAGE);
+      aiConfig.keys[editingProvider] = '';
       el.inputApiKey.value = '';
+      saveAiConfig();
       syncApiBtn();
-      el.apiModal.classList.add('hidden');
-      showToast('APIキーを削除しました');
+      showToast(`${AI_PROVIDERS[editingProvider].name} のAPIキーを削除しました`);
     });
 
     document.querySelectorAll('[data-close]').forEach((b) => {
@@ -849,6 +1047,7 @@
   applyTheme(localStorage.getItem(THEME_KEY) || 'dark');
   loadHistory();
   loadProfiles();
+  loadAiConfig();
   syncApiBtn();
   bindEvents();
   registerSW();

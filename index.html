@@ -297,7 +297,9 @@
               <span id="rewriteDeltaBadge" class="delta-pill hidden"></span>
             </div>
             <div class="rewrite-head-actions">
-              <button id="btnAiRewrite" class="outline-btn sm hidden">高度AIリライト (Gemini)</button>
+              <button id="btnOpenChatGpt" class="outline-btn sm" title="最適プロンプトをコピーしてChatGPTを開く">ChatGPTで開く</button>
+              <button id="btnOpenClaude" class="outline-btn sm" title="最適プロンプトをコピーしてClaudeを開く">Claudeで開く</button>
+              <button id="btnAiRewrite" class="outline-btn sm accent-outline hidden">高度AIリライト</button>
               <button id="btnRunRewrite2" class="primary-btn sm">リライトを実行</button>
             </div>
           </div>
@@ -473,26 +475,40 @@
     </div>
   </div>
 
-  <!-- Optional API Settings Modal -->
+  <!-- Optional API Settings Modal (Gemini / ChatGPT / Claude) -->
   <div id="apiModal" class="modal hidden" role="dialog" aria-modal="true" aria-labelledby="apiTitle">
     <div class="modal-card">
       <div class="modal-head">
-        <h3 id="apiTitle">AI連携設定（任意）</h3>
+        <h3 id="apiTitle">AI連携設定（Gemini / ChatGPT / Claude）</h3>
         <button class="icon-btn" data-close="apiModal" aria-label="閉じる">✕</button>
       </div>
       <div class="modal-body">
         <p class="modal-desc">
-          通常のAI文体チェックおよび自然文リライトは<strong>APIキー不要・端末内完結</strong>で動作します。<br>
-          さらに高度な文脈リライトを行いたい場合のみ、ご自身の Gemini API キーを設定してください（お使いのブラウザーの localStorage のみに保存されます）。
+          通常のチェック＆リライトは<strong>APIキー不要・端末内完結</strong>で動作します。<br>
+          API連携を使う場合は、利用するAIを選んでAPIキーを入力してください（キーはお使いのブラウザーの localStorage のみに保存されます）。
         </p>
+
+        <div class="provider-tabs" role="tablist" aria-label="AIプロバイダ選択">
+          <button class="provider-tab active" data-provider="gemini" role="tab" aria-selected="true">Gemini</button>
+          <button class="provider-tab" data-provider="openai" role="tab" aria-selected="false">ChatGPT (OpenAI)</button>
+          <button class="provider-tab" data-provider="claude" role="tab" aria-selected="false">Claude (Anthropic)</button>
+        </div>
+
         <label class="ctrl-field">
-          <span>Gemini API キー</span>
+          <span id="apiKeyLabel">Gemini API キー</span>
           <input id="inputApiKey" type="password" placeholder="AIza...">
         </label>
+
+        <label class="ctrl-field">
+          <span>モデル ID</span>
+          <input id="inputApiModel" type="text" placeholder="gemini-2.0-flash">
+        </label>
+
+        <p id="providerNote" class="provider-note"></p>
       </div>
       <div class="modal-foot">
-        <button id="btnRemoveApiKey" class="outline-btn sm">削除</button>
-        <button id="btnSaveApiKey" class="primary-btn sm">保存する</button>
+        <button id="btnRemoveApiKey" class="outline-btn sm">このAIのキーを削除</button>
+        <button id="btnSaveApiKey" class="primary-btn sm">保存して使用する</button>
       </div>
     </div>
   </div>

@@ -927,6 +927,39 @@ mark.selected { outline: 2px solid var(--text-main); }
 
 .modal-body { padding: 16px 18px; display: flex; flex-direction: column; gap: 12px; }
 .modal-desc { margin: 0; font-size: 13px; color: var(--text-sub); }
+
+.provider-tabs {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 6px;
+  background: var(--bg-inset);
+  padding: 4px;
+  border-radius: 10px;
+  border: 1px solid var(--border);
+}
+
+.provider-tab {
+  background: transparent;
+  border: 1px solid transparent;
+  color: var(--text-sub);
+  border-radius: 7px;
+  padding: 7px 6px;
+  font-size: 12px;
+  font-weight: 700;
+}
+.provider-tab:hover { color: var(--text-main); }
+.provider-tab.active {
+  background: var(--bg-card);
+  color: var(--accent);
+  border-color: var(--border-strong);
+}
+
+.provider-note {
+  margin: 0;
+  font-size: 11.5px;
+  color: var(--text-muted);
+  line-height: 1.5;
+}
 .howto-list { margin: 0; padding-left: 20px; display: flex; flex-direction: column; gap: 10px; font-size: 13px; color: var(--text-sub); }
 .howto-list strong { color: var(--text-main); }
 
