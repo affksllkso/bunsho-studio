@@ -1,8 +1,9 @@
-const CACHE_NAME = 'bunsho-studio-v2';
+const CACHE_NAME = 'bunsho-studio-v3';
 const ASSETS = [
   './',
   './index.html',
   './styles.css',
+  './file-importer.js',
   './analyzer.js',
   './app.js',
   './manifest.json',

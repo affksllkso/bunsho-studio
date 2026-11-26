@@ -1,92 +1,114 @@
 /**
- * 文脈工房 — AI文章判定＆自然文リライトPWA メインアプリケーション
+ * 文脈工房 — ことばねUIベース メインアプリケーション
+ * Word (.docx) / PDF (.pdf) / テキスト読込 ＋ AI文体チェック ＋ 自然文リライト ＋ 履歴・文体プロファイル
  */
 (function () {
   'use strict';
 
-  const HISTORY_KEY = 'bunsho_humanizer_history_v1';
-  const THEME_KEY = 'bunsho_studio_theme';
+  const HISTORY_KEY = 'bunsho_kotobane_history_v1';
+  const PROFILE_KEY = 'bunsho_kotobane_profiles_v1';
+  const THEME_KEY = 'bunsho_kotobane_theme';
   const API_KEY_STORAGE = 'bunsho_gemini_api_key';
 
-  const SAMPLES = {
-    'ai-blog': [
-      '本記事では、リモートワークにおける生産性向上のコツについて詳しく解説します。近年、働き方の多様化に伴い、自宅での業務効率化への注目が集まっています。',
-      '',
-      'まず、作業環境を整えることが重要な役割を果たします。さらに、適切な休憩を取り入れることで集中力を向上させます。一方で、コミュニケーション不足に陥るリスクもあると言えるでしょう。',
-      '',
-      '- **タスクの可視化**：優先順位を明確にすることで、業務を効率的に進めることが可能です。',
-      '- **ツールの活用**：チャットツールをシームレスに連携させることで、情報共有を促進します。',
-      '',
-      '以上のことから、多角的な視点で環境を見直すことが不可欠です。結論として、日々の小さな工夫が大きな成果をもたらします。'
-    ].join('\n'),
-    'ai-biz': [
-      '新サービスの導入プロジェクトについてご報告いたします。現在の市場環境において、顧客体験の最適化はますます高まっています。',
-      '',
-      'まず、ユーザー調査を実施し、包括的な課題抽出を行いました。次に、業務フローの見直しを行うことが可能です。しかしながら、初期コストの観点からは慎重な判断が求められます。',
-      '',
-      '最後に、社内研修を効果的に活用することで定着に寄与します。総じて、本施策は中長期的な成長に重要な役割を果たすと言えるでしょう。'
-    ].join('\n'),
-    'human': [
-      '先週から朝の散歩を始めてみた。最初は10分だけでも眠くて仕方なかったのに、3日ほど続けると意外と頭がすっきりしてくる。',
-      '',
-      'スマホをポケットにしまったまま近所の川沿いを歩いていると、普段は素通りしていたパン屋の匂いに気づいたりする。大きな目標を立てたわけじゃないけれど、こういう小さな気分転換があるだけで午前中の仕事がずいぶん楽になった気がする。'
-    ].join('\n')
-  };
+  const SAMPLE_TEXT = [
+    '本記事では、現代社会におけるデジタル学習の役割について詳しく解説します。近年、オンライン教材の普及に伴い、学習方法の多様化への注目が集まっています。',
+    '',
+    'まず、場所を選ばず学べる環境が重要な役割を果たします。さらに、個別の進捗に合わせて復習することが可能です。一方で、継続的なモチベーションの維持が課題になることも多いと言えるでしょう。',
+    '',
+    '- **学習計画の可視化**：目標を細かく設定することで、日々の達成感を向上させます。',
+    '- **ツール連携**：メモや資料をシームレスに整理することで、理解の定着を促進します。',
+    '',
+    '以上のことから、多角的な視点で学習環境を見直すことが不可欠です。結論として、小さな工夫の積み重ねが大きな成果をもたらします。'
+  ].join('\n');
 
   let history = [];
+  let profiles = [];
+  let lastDetection = null;
   let variantSeed = 0;
-  let lastBeforeScore = null;
   let deferredInstallPrompt = null;
   let toastTimer = null;
 
   const $ = (id) => document.getElementById(id);
   const el = {
+    sidebar: $('sidebar'),
+    mobileBackdrop: $('mobileBackdrop'),
+    crumbCurrent: $('crumbCurrent'),
+    onlineLabel: $('onlineLabel'),
+    navHistoryCount: $('navHistoryCount'),
+    viewStudio: $('viewStudio'),
+    viewHistory: $('viewHistory'),
+    viewProfiles: $('viewProfiles'),
+    dropZone: $('dropZone'),
+    fileInput: $('fileInput'),
+    uploadBtnText: $('uploadBtnText'),
+    loadedFileBadge: $('loadedFileBadge'),
     inputText: $('inputText'),
-    outputText: $('outputText'),
-    inputChars: $('inputChars'),
-    inputSentences: $('inputSentences'),
-    optStrength: $('optStrength'),
-    optTone: $('optTone'),
-    chkSoften: $('chkSoften'),
-    chkMarkdown: $('chkMarkdown'),
-    chkEndings: $('chkEndings'),
-    btnDetect: $('btnDetect'),
-    btnHumanize: $('btnHumanize'),
-    btnAiRewrite: $('btnAiRewrite'),
-    gaugeArc: $('gaugeArc'),
-    scoreValue: $('scoreValue'),
-    scoreLabel: $('scoreLabel'),
-    scoreDelta: $('scoreDelta'),
-    scoreSummary: $('scoreSummary'),
-    statAvgLen: $('statAvgLen'),
-    statBurst: $('statBurst'),
-    statMatches: $('statMatches'),
-    mPhrase: $('mPhrase'),
-    mStructure: $('mStructure'),
-    mTranslation: $('mTranslation'),
-    mUniformity: $('mUniformity'),
-    mEnding: $('mEnding'),
-    mFormatting: $('mFormatting'),
+    charCountLabel: $('charCountLabel'),
+    highlightCountBadge: $('highlightCountBadge'),
+    editorInputPane: $('editorInputPane'),
+    editorHighlightPane: $('editorHighlightPane'),
+    highlightCanvas: $('highlightCanvas'),
+    highlightReasonBox: $('highlightReasonBox'),
+    reportResultPane: $('reportResultPane'),
+    reportStatsPane: $('reportStatsPane'),
+    scoreRing: $('scoreRing'),
+    scoreNum: $('scoreNum'),
+    scoreStatusPill: $('scoreStatusPill'),
+    scoreCaption: $('scoreCaption'),
+    valPhrase: $('valPhrase'),
+    valConj: $('valConj'),
+    valEnd: $('valEnd'),
+    valLen: $('valLen'),
+    valStruct: $('valStruct'),
     barPhrase: $('barPhrase'),
-    barStructure: $('barStructure'),
-    barTranslation: $('barTranslation'),
-    barUniformity: $('barUniformity'),
-    barEnding: $('barEnding'),
-    barFormatting: $('barFormatting'),
-    afterScoreText: $('afterScoreText'),
-    highlightBox: $('highlightBox'),
-    diffBox: $('diffBox'),
+    barConj: $('barConj'),
+    barEnd: $('barEnd'),
+    barLen: $('barLen'),
+    barStruct: $('barStruct'),
+    footerMatchCount: $('footerMatchCount'),
+    stChars: $('stChars'),
+    stSentences: $('stSentences'),
+    stAvgLen: $('stAvgLen'),
+    stParagraphs: $('stParagraphs'),
+    stStdDev: $('stStdDev'),
+    stCv: $('stCv'),
+    dist30: $('dist30'),
+    dist50: $('dist50'),
+    dist70: $('dist70'),
+    dist71: $('dist71'),
+    dist30Val: $('dist30Val'),
+    dist50Val: $('dist50Val'),
+    dist70Val: $('dist70Val'),
+    dist71Val: $('dist71Val'),
+    stTopEndings: $('stTopEndings'),
+    stHeadConj: $('stHeadConj'),
+    optPreset: $('optPreset'),
+    optIntensity: $('optIntensity'),
+    intensityVal: $('intensityVal'),
+    chkKeepQuotes: $('chkKeepQuotes'),
+    chkRemoveMd: $('chkRemoveMd'),
+    chkVaryEndings: $('chkVaryEndings'),
+    rewriteDeltaBadge: $('rewriteDeltaBadge'),
+    outputText: $('outputText'),
+    afterScoreCaption: $('afterScoreCaption'),
+    diffCanvas: $('diffCanvas'),
     changesList: $('changesList'),
-    changeCount: $('changeCount'),
-    historyCount: $('historyCount'),
-    historyList: $('historyList'),
-    historyModal: $('historyModal'),
-    apiModal: $('apiModal'),
-    inputApiKey: $('inputApiKey'),
+    changeCountBadge: $('changeCountBadge'),
+    outResultPane: $('outResultPane'),
+    outDiffPane: $('outDiffPane'),
+    outChangesPane: $('outChangesPane'),
+    historyContainer: $('historyContainer'),
+    profName: $('profName'),
+    profSamplesWrap: $('profSamplesWrap'),
+    profileList: $('profileList'),
+    btnAiRewrite: $('btnAiRewrite'),
     btnInstallPwa: $('btnInstallPwa'),
-    onlineStatus: $('onlineStatus'),
+    btnThemeToggle: $('btnThemeToggle'),
     iconSun: $('iconSun'),
     iconMoon: $('iconMoon'),
+    howToModal: $('howToModal'),
+    apiModal: $('apiModal'),
+    inputApiKey: $('inputApiKey'),
     toast: $('toast')
   };
 
@@ -94,129 +116,202 @@
     el.toast.textContent = msg;
     el.toast.classList.remove('hidden');
     clearTimeout(toastTimer);
-    toastTimer = setTimeout(() => el.toast.classList.add('hidden'), 2400);
+    toastTimer = setTimeout(() => el.toast.classList.add('hidden'), 2600);
   }
 
-  function escapeHtml(s) {
+  function esc(s) {
     return String(s || '')
       .replace(/&/g, '&amp;')
       .replace(/</g, '&lt;')
       .replace(/>/g, '&gt;');
   }
 
-  function scoreColor(score) {
-    if (score >= 72) return 'var(--danger)';
-    if (score >= 48) return 'var(--warn)';
-    if (score >= 28) return 'var(--indigo)';
-    return 'var(--ok)';
+  // Navigation
+  function switchView(view) {
+    el.viewStudio.classList.toggle('hidden', view !== 'studio');
+    el.viewHistory.classList.toggle('hidden', view !== 'history');
+    el.viewProfiles.classList.toggle('hidden', view !== 'profiles');
+
+    const titles = { studio: '文章スタジオ', history: '履歴', profiles: '文体プロファイル' };
+    el.crumbCurrent.textContent = titles[view] || '文章スタジオ';
+
+    document.querySelectorAll('.nav-item').forEach((n) => {
+      n.classList.toggle('active', n.dataset.view === view);
+    });
+
+    if (view === 'history') renderHistory();
+    if (view === 'profiles') renderProfiles();
+    closeMobileSidebar();
   }
 
-  function updateInputCounts() {
-    const text = el.inputText.value;
-    const chars = text.replace(/\s/g, '').length;
-    const sents = (text.match(/[^。！？!?\n]+[。！？!?]?/g) || []).filter((s) => s.trim()).length;
-    el.inputChars.textContent = chars.toLocaleString();
-    el.inputSentences.textContent = sents;
+  function closeMobileSidebar() {
+    el.sidebar.classList.remove('open');
+    el.mobileBackdrop.classList.add('hidden');
   }
 
-  function renderDetection(res, beforeScoreForDelta) {
-    const circumference = 314.16;
-    const offset = circumference * (1 - res.score / 100);
-    el.gaugeArc.style.strokeDashoffset = String(offset);
-    el.gaugeArc.style.stroke = scoreColor(res.score);
-    el.scoreValue.textContent = res.stats.chars > 0 ? `${res.score}%` : '—';
-
-    el.scoreLabel.textContent = res.label;
-    el.scoreLabel.className = `score-badge level-${res.level}`;
-    el.scoreSummary.textContent = res.summary;
-
-    if (typeof beforeScoreForDelta === 'number' && beforeScoreForDelta !== res.score) {
-      const diff = res.score - beforeScoreForDelta;
-      el.scoreDelta.textContent = diff < 0
-        ? `変換前 ${beforeScoreForDelta}% → ${res.score}%（${diff}pt改善）`
-        : `変換前 ${beforeScoreForDelta}% → ${res.score}%`;
-      el.scoreDelta.classList.remove('hidden');
-    } else {
-      el.scoreDelta.classList.add('hidden');
-    }
-
-    el.statAvgLen.textContent = res.stats.avgLen;
-    el.statBurst.textContent = res.stats.burstiness.toFixed(2);
-    el.statMatches.textContent = res.matches.length;
-
-    const pairs = [
-      ['phrase', el.mPhrase, el.barPhrase],
-      ['structure', el.mStructure, el.barStructure],
-      ['translation', el.mTranslation, el.barTranslation],
-      ['uniformity', el.mUniformity, el.barUniformity],
-      ['ending', el.mEnding, el.barEnding],
-      ['formatting', el.mFormatting, el.barFormatting]
-    ];
-    for (const [key, labelEl, barEl] of pairs) {
-      const v = res.metrics[key] || 0;
-      labelEl.textContent = `${v}%`;
-      barEl.style.width = `${v}%`;
-      barEl.style.background = scoreColor(v);
-    }
+  // Tabs
+  function switchEditorTab(tab) {
+    document.querySelectorAll('[data-editor-tab]').forEach((b) => {
+      const active = b.dataset.editorTab === tab;
+      b.classList.toggle('active', active);
+      b.setAttribute('aria-selected', String(active));
+    });
+    el.editorInputPane.classList.toggle('hidden', tab !== 'input');
+    el.editorHighlightPane.classList.toggle('hidden', tab !== 'highlight');
   }
 
-  function runDetect() {
+  function switchReportTab(tab) {
+    document.querySelectorAll('[data-report-tab]').forEach((b) => {
+      const active = b.dataset.reportTab === tab;
+      b.classList.toggle('active', active);
+      b.setAttribute('aria-selected', String(active));
+    });
+    el.reportResultPane.classList.toggle('hidden', tab !== 'result');
+    el.reportStatsPane.classList.toggle('hidden', tab !== 'stats');
+  }
+
+  function switchOutTab(tab) {
+    document.querySelectorAll('[data-out-tab]').forEach((b) => {
+      const active = b.dataset.outTab === tab;
+      b.classList.toggle('active', active);
+      b.setAttribute('aria-selected', String(active));
+    });
+    el.outResultPane.classList.toggle('hidden', tab !== 'result');
+    el.outDiffPane.classList.toggle('hidden', tab !== 'diff');
+    el.outChangesPane.classList.toggle('hidden', tab !== 'changes');
+  }
+
+  function updateCharCount() {
+    const chars = el.inputText.value.replace(/\s/g, '').length;
+    el.charCountLabel.textContent = `${chars.toLocaleString()} 字`;
+  }
+
+  // Detection & Stats Rendering
+  function renderDetection(res) {
+    lastDetection = res;
+    const circ = 289.03;
+    const offset = circ * (1 - res.score / 100);
+    el.scoreRing.style.strokeDashoffset = String(offset);
+    el.scoreRing.style.stroke = res.score >= 70 ? 'var(--rose)' : res.score >= 45 ? 'var(--amber)' : res.score >= 25 ? 'var(--accent)' : 'var(--emerald)';
+
+    el.scoreNum.textContent = String(res.score);
+    el.scoreStatusPill.textContent = res.label;
+    el.scoreCaption.textContent = res.summary;
+
+    const c = res.categories;
+    el.valPhrase.textContent = c.phrase;
+    el.barPhrase.style.width = `${c.phrase}%`;
+    el.valConj.textContent = c.conjunction;
+    el.barConj.style.width = `${c.conjunction}%`;
+    el.valEnd.textContent = c.ending;
+    el.barEnd.style.width = `${c.ending}%`;
+    el.valLen.textContent = c.length;
+    el.barLen.style.width = `${c.length}%`;
+    el.valStruct.textContent = c.structure;
+    el.barStruct.style.width = `${c.structure}%`;
+
+    const mCount = res.matches.length;
+    el.highlightCountBadge.textContent = mCount;
+    el.footerMatchCount.textContent = mCount;
+
+    // Highlight Canvas
+    el.highlightCanvas.innerHTML = window.BunshoEngine.buildHighlightHtml(el.inputText.value, res.matches);
+    el.highlightReasonBox.textContent = mCount > 0
+      ? '色付きの箇所を選ぶと、検出理由を確認できます。'
+      : 'AI文体の特徴的な定型句は検出されませんでした。';
+
+    el.highlightCanvas.querySelectorAll('mark[data-match-idx]').forEach((mk) => {
+      const showReason = () => {
+        el.highlightCanvas.querySelectorAll('mark.selected').forEach((x) => x.classList.remove('selected'));
+        mk.classList.add('selected');
+        const m = res.matches[Number(mk.dataset.matchIdx)];
+        if (m) {
+          el.highlightReasonBox.innerHTML = `<strong>[${esc(m.cat)}] 「${esc(m.text)}」</strong>：${esc(m.reason)}`;
+        }
+      };
+      mk.addEventListener('click', showReason);
+      mk.addEventListener('focus', showReason);
+    });
+
+    // Stats Tab
+    const s = res.stats;
+    el.stChars.textContent = s.chars.toLocaleString();
+    el.stSentences.textContent = s.sentences;
+    el.stAvgLen.textContent = `${s.avgLen} 字`;
+    el.stParagraphs.textContent = s.paragraphs;
+    el.stStdDev.textContent = s.stdDev.toFixed(1);
+    el.stCv.textContent = s.cv.toFixed(2);
+
+    const totalSents = Math.max(1, s.sentences);
+    el.dist30.style.width = `${Math.round((s.lenBuckets.s30 / totalSents) * 100)}%`;
+    el.dist50.style.width = `${Math.round((s.lenBuckets.s50 / totalSents) * 100)}%`;
+    el.dist70.style.width = `${Math.round((s.lenBuckets.s70 / totalSents) * 100)}%`;
+    el.dist71.style.width = `${Math.round((s.lenBuckets.s71 / totalSents) * 100)}%`;
+    el.dist30Val.textContent = s.lenBuckets.s30;
+    el.dist50Val.textContent = s.lenBuckets.s50;
+    el.dist70Val.textContent = s.lenBuckets.s70;
+    el.dist71Val.textContent = s.lenBuckets.s71;
+
+    el.stTopEndings.innerHTML = s.topEndings.length
+      ? s.topEndings.map(([k, v]) => `<span class="stat-tag">〜${esc(k)} (${v})</span>`).join('')
+      : '<span class="stat-tag">データなし</span>';
+
+    el.stHeadConj.innerHTML = s.headConjunctions.length
+      ? s.headConjunctions.map(([k, v]) => `<span class="stat-tag">${esc(k)} (${v})</span>`).join('')
+      : '<span class="stat-tag">検出なし</span>';
+  }
+
+  function runCheck(silent) {
     const text = el.inputText.value.trim();
     if (!text) {
-      showToast('判定する文章を入力してください');
+      if (!silent) showToast('チェックする原稿を入力するか、ファイルを読み込んでください');
       return null;
     }
     const res = window.BunshoEngine.detectAI(text);
-    lastBeforeScore = res.score;
     renderDetection(res);
-    el.highlightBox.innerHTML = window.BunshoEngine.buildHighlightHtml(text, res.matches);
+    if (!silent) showToast(`AI文体チェック完了：スコア ${res.score} / 100（検出 ${res.matches.length} 件）`);
     return res;
   }
 
-  function runHumanize(incrementSeed) {
+  function runRewrite(bumpSeed) {
     const text = el.inputText.value.trim();
     if (!text) {
-      showToast('変換する文章を入力してください');
+      showToast('整える原稿を入力してください');
       return;
     }
-    if (incrementSeed) variantSeed++;
+    if (bumpSeed) variantSeed++;
 
     const beforeRes = window.BunshoEngine.detectAI(text);
-    lastBeforeScore = beforeRes.score;
-    el.highlightBox.innerHTML = window.BunshoEngine.buildHighlightHtml(text, beforeRes.matches);
+    renderDetection(beforeRes);
 
+    const activeProfile = profiles.length > 0 ? profiles[0] : null;
     const converted = window.BunshoEngine.humanize(text, {
-      strength: el.optStrength.value,
-      tone: el.optTone.value,
-      softenPhrases: el.chkSoften.checked,
-      removeMarkdown: el.chkMarkdown.checked,
-      varyEndings: el.chkEndings.checked,
+      preset: el.optPreset.value,
+      intensity: Number(el.optIntensity.value),
+      keepQuotes: el.chkKeepQuotes.checked,
+      removeMarkdown: el.chkRemoveMd.checked,
+      varyEndings: el.chkVaryEndings.checked,
+      profile: activeProfile,
       seed: variantSeed
     });
 
     el.outputText.value = converted.text;
     const afterRes = window.BunshoEngine.detectAI(converted.text);
 
-    // 変換後のスコアを表示しつつ、変換前との改善幅を明示
-    renderDetection(afterRes, beforeRes.score);
-    el.afterScoreText.textContent = `変換後のAI度: ${afterRes.score}%（変換前 ${beforeRes.score}%）`;
+    const diffPt = afterRes.score - beforeRes.score;
+    el.rewriteDeltaBadge.textContent = diffPt < 0
+      ? `スコア ${beforeRes.score} → ${afterRes.score}（${diffPt}pt改善）`
+      : `スコア ${beforeRes.score} → ${afterRes.score}`;
+    el.rewriteDeltaBadge.classList.remove('hidden');
+    el.afterScoreCaption.textContent = `変換後のAI文体スコア: ${afterRes.score} / 100（変換前 ${beforeRes.score}）`;
 
-    // 差分・変更点リスト更新
-    el.diffBox.innerHTML = window.BunshoEngine.buildDiffHtml(text, converted.text);
-    el.changeCount.textContent = converted.changes.length;
-    el.changesList.innerHTML = '';
-    if (converted.changes.length === 0) {
-      el.changesList.innerHTML = '<li class="empty-msg">元の文章がすでに自然なため、大きな書き換えは不要でした。</li>';
-    } else {
-      for (const ch of converted.changes) {
-        const li = document.createElement('li');
-        li.className = 'change-item';
-        li.innerHTML = `<div class="change-cat">${escapeHtml(ch.cat)}</div><div>${escapeHtml(ch.detail)}</div>`;
-        el.changesList.appendChild(li);
-      }
-    }
+    el.diffCanvas.innerHTML = window.BunshoEngine.buildDiffHtml(text, converted.text);
+    el.changeCountBadge.textContent = converted.changes.length;
+    el.changesList.innerHTML = converted.changes.length
+      ? converted.changes.map((c) => `<li class="change-item"><div class="change-cat">${esc(c.cat)}</div><div>${esc(c.detail)}</div></li>`).join('')
+      : '<li class="empty-note">元の文章がすでに自然なため、大きな書き換えは不要でした。</li>';
 
-    pushHistory({
+    saveHistoryEntry({
       id: Date.now(),
       createdAt: Date.now(),
       beforeScore: beforeRes.score,
@@ -225,8 +320,31 @@
       output: converted.text
     });
 
-    switchOutputTab('humanized');
-    showToast(`変換完了：AI度 ${beforeRes.score}% → ${afterRes.score}%`);
+    switchOutTab('result');
+    $('rewriteSection').scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    showToast(`自然な文章に整えました（スコア ${beforeRes.score} → ${afterRes.score}）`);
+  }
+
+  // File Upload (Word .docx / PDF .pdf / TXT)
+  async function handleFileUpload(file) {
+    if (!file) return;
+    const origLabel = el.uploadBtnText.textContent;
+    el.uploadBtnText.textContent = '読み込み中…';
+    try {
+      const res = await window.BunshoImporter.readFileAsText(file);
+      el.inputText.value = res.text;
+      updateCharCount();
+      el.loadedFileBadge.textContent = `${res.fileName} (${res.fileType} · ${res.meta})`;
+      el.loadedFileBadge.classList.remove('hidden');
+      switchEditorTab('input');
+      runCheck(true);
+      showToast(`${res.fileType}「${res.fileName}」を読み込みました`);
+    } catch (err) {
+      showToast(err.message || 'ファイルの読み込みに失敗しました');
+    } finally {
+      el.uploadBtnText.textContent = origLabel;
+      el.fileInput.value = '';
+    }
   }
 
   // Optional Gemini API Rewrite
@@ -238,7 +356,7 @@
       return;
     }
     if (!text) {
-      showToast('変換する文章を入力してください');
+      showToast('原稿を入力してください');
       return;
     }
 
@@ -246,19 +364,13 @@
     el.btnAiRewrite.disabled = true;
     el.btnAiRewrite.textContent = 'リライト中…';
 
-    const toneMap = {
-      keep: '元の文体を自然に保つ',
-      polite: '丁寧で自然な「です・ます」調',
-      casual: '親しみやすい話し言葉寄りのトーン',
-      dearu: '引き締まった「だ・である」調'
-    };
-
+    const presetLabel = el.optPreset.options[el.optPreset.selectedIndex].text;
     const prompt = [
-      'あなたは日本語の編集者です。以下の文章から「AIが書いたような定型表現・翻訳調・硬さ・機械的な箇条書き」を取り除き、意味や事実関係を変えずに、人間が自然に書いた読みやすい日本語に書き直してください。',
-      `文体指定: ${toneMap[el.optTone.value] || toneMap.keep}`,
-      '出力は書き直した本文のみを返し、前置きや解説は一切付けないでください。',
+      'あなたは日本語の編集者です。以下の原稿からAI特有の定型句・翻訳調・過剰な装飾を取り除き、元の意味・主張・引用・専門用語・事実を保ったまま、人間が自然に書いた読みやすい日本語へ整えてください。',
+      `文体指定: ${presetLabel}`,
+      `変更度: ${el.optIntensity.value}/100`,
+      '出力は書き直した本文のみを返し、解説や前置きは書かないでください。',
       '',
-      '【元の文章】',
       text
     ].join('\n');
 
@@ -268,270 +380,350 @@
         {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            contents: [{ parts: [{ text: prompt }] }]
-          })
+          body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }] })
         }
       );
       if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
       const data = await resp.json();
       const rewritten = data?.candidates?.[0]?.content?.parts?.[0]?.text?.trim();
-      if (!rewritten) throw new Error('Empty response');
+      if (!rewritten) throw new Error('Empty');
 
       el.outputText.value = rewritten;
       const afterRes = window.BunshoEngine.detectAI(rewritten);
-      renderDetection(afterRes, beforeRes.score);
-      el.afterScoreText.textContent = `高度リライト後のAI度: ${afterRes.score}%（変換前 ${beforeRes.score}%）`;
-      el.diffBox.innerHTML = window.BunshoEngine.buildDiffHtml(text, rewritten);
-      el.changeCount.textContent = '1';
-      el.changesList.innerHTML = '<li class="change-item"><div class="change-cat">高度AIリライト</div><div>Gemini APIを使用して文脈全体をより自然な日本語に再構成しました。</div></li>';
-      switchOutputTab('humanized');
-      showToast(`高度リライト完了：AI度 ${beforeRes.score}% → ${afterRes.score}%`);
-    } catch (err) {
-      showToast('APIリライトに失敗しました。キー設定や通信状態を確認してください。');
+      el.rewriteDeltaBadge.textContent = `スコア ${beforeRes.score} → ${afterRes.score}`;
+      el.rewriteDeltaBadge.classList.remove('hidden');
+      el.afterScoreCaption.textContent = `高度リライト後のAI文体スコア: ${afterRes.score} / 100（変換前 ${beforeRes.score}）`;
+      el.diffCanvas.innerHTML = window.BunshoEngine.buildDiffHtml(text, rewritten);
+      switchOutTab('result');
+      showToast(`高度AIリライト完了（スコア ${beforeRes.score} → ${afterRes.score}）`);
+    } catch {
+      showToast('Gemini APIでのリライトに失敗しました。キー設定や通信を確認してください。');
     } finally {
       el.btnAiRewrite.disabled = false;
-      el.btnAiRewrite.textContent = '高度AIリライト';
+      el.btnAiRewrite.textContent = '高度AIリライト (Gemini)';
     }
   }
 
-  function switchOutputTab(name) {
-    document.querySelectorAll('.out-tab').forEach((t) => {
-      const active = t.dataset.tab === name;
-      t.classList.toggle('active', active);
-      t.setAttribute('aria-selected', String(active));
-    });
-    $('paneHumanized').classList.toggle('hidden', name !== 'humanized');
-    $('paneHighlight').classList.toggle('hidden', name !== 'highlight');
-    $('paneDiff').classList.toggle('hidden', name !== 'diff');
-    $('paneChanges').classList.toggle('hidden', name !== 'changes');
+  // Export Helpers
+  function downloadBlob(filename, content, mime) {
+    const blob = new Blob([content], { type: mime });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(url);
   }
 
-  // History
+  function exportWordDoc(text, baseName) {
+    const htmlBody = text.split('\n').map((line) => `<p>${esc(line) || '&nbsp;'}</p>`).join('');
+    const docHtml = `<!DOCTYPE html><html lang="ja"><head><meta charset="utf-8"><style>body{font-family:"Yu Mincho","MS Mincho",serif;font-size:11pt;line-height:1.8;}</style></head><body>${htmlBody}</body></html>`;
+    downloadBlob(`${baseName}.doc`, '\ufeff' + docHtml, 'application/msword;charset=utf-8');
+  }
+
+  // History Storage
   function loadHistory() {
     try {
-      const raw = localStorage.getItem(HISTORY_KEY);
-      history = raw ? JSON.parse(raw) : [];
-    } catch {
-      history = [];
-    }
-    el.historyCount.textContent = history.length;
+      history = JSON.parse(localStorage.getItem(HISTORY_KEY) || '[]');
+    } catch { history = []; }
+    el.navHistoryCount.textContent = history.length;
   }
 
-  function pushHistory(entry) {
+  function saveHistoryEntry(entry) {
     history.unshift(entry);
-    history = history.slice(0, 20);
-    try {
-      localStorage.setItem(HISTORY_KEY, JSON.stringify(history));
-    } catch {}
-    el.historyCount.textContent = history.length;
+    history = history.slice(0, 30);
+    try { localStorage.setItem(HISTORY_KEY, JSON.stringify(history)); } catch {}
+    el.navHistoryCount.textContent = history.length;
   }
 
-  function renderHistoryModal() {
-    el.historyList.innerHTML = '';
+  function renderHistory() {
     if (history.length === 0) {
-      el.historyList.innerHTML = '<div class="empty-msg">まだ判定・変換履歴はありません。</div>';
+      el.historyContainer.innerHTML = `
+        <div class="empty-note" style="grid-column: 1 / -1;">
+          <p style="margin:0 0 12px;">保存された履歴はありません</p>
+          <button id="btnEmptyOpenStudio" class="primary-btn sm">文章スタジオを開く</button>
+        </div>
+      `;
+      $('btnEmptyOpenStudio').addEventListener('click', () => switchView('studio'));
       return;
     }
-    for (const item of history) {
+
+    el.historyContainer.innerHTML = '';
+    history.forEach((item) => {
       const d = new Date(item.createdAt);
       const stamp = `${d.getMonth() + 1}/${d.getDate()} ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
-      const div = document.createElement('div');
-      div.className = 'history-item';
-      div.innerHTML = `
-        <div class="history-top">
+      const card = document.createElement('div');
+      card.className = 'history-card';
+      card.innerHTML = `
+        <div class="history-meta">
           <span>${stamp}</span>
-          <strong>AI度 ${item.beforeScore}% → ${item.afterScore}%</strong>
+          <strong>スコア ${item.beforeScore} → ${item.afterScore}</strong>
         </div>
-        <div class="history-preview">${escapeHtml(item.input.slice(0, 60))}</div>
+        <div class="history-excerpt">${esc(item.input)}</div>
       `;
-      div.addEventListener('click', () => {
+      card.addEventListener('click', () => {
         el.inputText.value = item.input;
         el.outputText.value = item.output;
-        updateInputCounts();
-        const afterRes = window.BunshoEngine.detectAI(item.output);
-        renderDetection(afterRes, item.beforeScore);
-        el.diffBox.innerHTML = window.BunshoEngine.buildDiffHtml(item.input, item.output);
-        el.historyModal.classList.add('hidden');
-        showToast('履歴を読み込みました');
+        updateCharCount();
+        runCheck(true);
+        el.diffCanvas.innerHTML = window.BunshoEngine.buildDiffHtml(item.input, item.output);
+        switchView('studio');
+        showToast('履歴を文章スタジオに読み込みました');
       });
-      el.historyList.appendChild(div);
+      el.historyContainer.appendChild(card);
+    });
+  }
+
+  // Style Profiles
+  function loadProfiles() {
+    try {
+      profiles = JSON.parse(localStorage.getItem(PROFILE_KEY) || '[]');
+    } catch { profiles = []; }
+  }
+
+  function saveProfiles() {
+    try { localStorage.setItem(PROFILE_KEY, JSON.stringify(profiles)); } catch {}
+  }
+
+  function renderProfiles() {
+    if (profiles.length === 0) {
+      el.profileList.innerHTML = '<div class="empty-note">保存された文体プロファイルはまだありません。左のフォームから自作文を登録してください。</div>';
+      return;
     }
+    el.profileList.innerHTML = '';
+    profiles.forEach((p, idx) => {
+      const div = document.createElement('div');
+      div.className = 'profile-card';
+      div.innerHTML = `
+        <div class="history-meta">
+          <strong>${esc(p.name)}</strong>
+          <button class="text-btn" data-del-prof="${idx}">削除</button>
+        </div>
+        <div class="tag-cloud">
+          <span class="stat-tag">文体: ${esc(p.toneLabel)}</span>
+          <span class="stat-tag">平均文長: ${p.avgLen}字</span>
+          <span class="stat-tag">学習元: ${p.sampleCount}本 (${p.totalChars}字)</span>
+          ${(p.topEndings || []).map((e) => `<span class="stat-tag">${esc(e)}</span>`).join('')}
+        </div>
+      `;
+      div.querySelector('[data-del-prof]').addEventListener('click', () => {
+        profiles.splice(idx, 1);
+        saveProfiles();
+        renderProfiles();
+        showToast('プロファイルを削除しました');
+      });
+      el.profileList.appendChild(div);
+    });
   }
 
-  function syncApiButton() {
-    const hasKey = Boolean(localStorage.getItem(API_KEY_STORAGE));
-    el.btnAiRewrite.classList.toggle('hidden', !hasKey);
-  }
-
+  // Theme
   function applyTheme(theme) {
     document.documentElement.setAttribute('data-theme', theme);
     localStorage.setItem(THEME_KEY, theme);
-    el.iconSun.classList.toggle('hidden', theme !== 'dark');
-    el.iconMoon.classList.toggle('hidden', theme === 'dark');
+    const isDark = theme === 'dark';
+    el.iconSun.classList.toggle('hidden', !isDark);
+    el.iconMoon.classList.toggle('hidden', isDark);
+    el.btnThemeToggle.title = isDark ? 'ライトモードに切り替え' : 'ダークモードに切り替え';
+    el.btnThemeToggle.setAttribute('aria-label', el.btnThemeToggle.title);
+  }
+
+  function syncApiBtn() {
+    el.btnAiRewrite.classList.toggle('hidden', !localStorage.getItem(API_KEY_STORAGE));
   }
 
   function bindEvents() {
-    el.inputText.addEventListener('input', updateInputCounts);
+    // Sidebar nav
+    $('btnBrandHome').addEventListener('click', () => switchView('studio'));
+    document.querySelectorAll('.nav-item').forEach((btn) => {
+      btn.addEventListener('click', () => switchView(btn.dataset.view));
+    });
 
-    // Samples
-    document.querySelectorAll('.chip-btn[data-sample]').forEach((btn) => {
-      btn.addEventListener('click', () => {
-        el.inputText.value = SAMPLES[btn.dataset.sample] || '';
-        updateInputCounts();
-        runDetect();
-        showToast('サンプル文章を読み込み、AI度合いを判定しました');
+    $('btnMobileMenu').addEventListener('click', () => {
+      el.sidebar.classList.toggle('open');
+      el.mobileBackdrop.classList.toggle('hidden', !el.sidebar.classList.contains('open'));
+    });
+    el.mobileBackdrop.addEventListener('click', closeMobileSidebar);
+
+    // Tabs
+    document.querySelectorAll('[data-editor-tab]').forEach((b) => {
+      b.addEventListener('click', () => switchEditorTab(b.dataset.editorTab));
+    });
+    document.querySelectorAll('[data-report-tab]').forEach((b) => {
+      b.addEventListener('click', () => switchReportTab(b.dataset.reportTab));
+    });
+    document.querySelectorAll('[data-out-tab]').forEach((b) => {
+      b.addEventListener('click', () => switchOutTab(b.dataset.outTab));
+    });
+
+    // Input & Sample
+    el.inputText.addEventListener('input', updateCharCount);
+    $('btnUseSample').addEventListener('click', () => {
+      el.inputText.value = SAMPLE_TEXT;
+      el.loadedFileBadge.classList.add('hidden');
+      updateCharCount();
+      runCheck(false);
+    });
+
+    // File Upload & Drag-and-Drop
+    el.fileInput.addEventListener('change', (e) => {
+      if (e.target.files && e.target.files[0]) handleFileUpload(e.target.files[0]);
+    });
+
+    ['dragenter', 'dragover'].forEach((ev) => {
+      el.dropZone.addEventListener(ev, (e) => {
+        e.preventDefault();
+        el.dropZone.classList.add('drag-over');
       });
     });
-
-    $('btnPaste').addEventListener('click', async () => {
-      try {
-        const text = await navigator.clipboard.readText();
-        el.inputText.value = text;
-        updateInputCounts();
-        showToast('クリップボードから貼り付けました');
-      } catch {
-        showToast('貼り付けに失敗しました（Ctrl+Vでお試しください）');
-      }
+    ['dragleave', 'drop'].forEach((ev) => {
+      el.dropZone.addEventListener(ev, (e) => {
+        e.preventDefault();
+        el.dropZone.classList.remove('drag-over');
+      });
+    });
+    el.dropZone.addEventListener('drop', (e) => {
+      const file = e.dataTransfer?.files?.[0];
+      if (file) handleFileUpload(file);
     });
 
-    $('btnClear').addEventListener('click', () => {
-      el.inputText.value = '';
-      el.outputText.value = '';
-      updateInputCounts();
-      renderDetection(window.BunshoEngine.detectAI(''));
-      el.afterScoreText.textContent = '変換後のAI度: —';
-      el.highlightBox.textContent = '判定を実行すると、AIらしい表現が色分け表示されます。';
-      el.diffBox.textContent = '変換を実行すると、Before / After の差分が表示されます。';
-      el.changesList.innerHTML = '<li class="empty-msg">まだ変換履歴がありません。</li>';
-      el.changeCount.textContent = '0';
-    });
-
-    el.btnDetect.addEventListener('click', () => {
-      const res = runDetect();
-      if (res) {
-        switchOutputTab('highlight');
-        showToast(`判定完了：AI度 ${res.score}%（${res.label}）`);
-      }
-    });
-
-    el.btnHumanize.addEventListener('click', () => runHumanize(false));
+    // Check & Rewrite buttons
+    $('btnCheckStyle').addEventListener('click', () => runCheck(false));
+    $('btnRewrite').addEventListener('click', () => runRewrite(false));
+    $('btnRunRewrite2').addEventListener('click', () => runRewrite(false));
     el.btnAiRewrite.addEventListener('click', runGeminiRewrite);
+    $('btnVariant').addEventListener('click', () => runRewrite(true));
 
-    $('btnRetryVariant').addEventListener('click', () => runHumanize(true));
+    $('btnViewHighlights').addEventListener('click', () => {
+      if (!lastDetection) runCheck(true);
+      switchEditorTab('highlight');
+    });
 
-    $('btnApplyToInput').addEventListener('click', () => {
-      if (!el.outputText.value.trim()) return;
-      el.inputText.value = el.outputText.value;
-      updateInputCounts();
-      runDetect();
-      showToast('変換結果を入力欄へ戻して再判定しました');
+    el.optIntensity.addEventListener('input', () => {
+      el.intensityVal.textContent = el.optIntensity.value;
+    });
+
+    // Copy & Export
+    $('btnCopyInput').addEventListener('click', async () => {
+      if (!el.inputText.value.trim()) return;
+      try {
+        await navigator.clipboard.writeText(el.inputText.value);
+        showToast('原稿をコピーしました');
+      } catch { showToast('コピーに失敗しました'); }
+    });
+
+    $('btnExportInput').addEventListener('click', () => {
+      if (!el.inputText.value.trim()) return;
+      downloadBlob(`bunsho-draft-${new Date().toISOString().slice(0, 10)}.txt`, el.inputText.value, 'text/plain;charset=utf-8');
     });
 
     $('btnCopyOutput').addEventListener('click', async () => {
-      const txt = el.outputText.value;
-      if (!txt.trim()) {
-        showToast('コピーする変換結果がありません');
-        return;
-      }
+      if (!el.outputText.value.trim()) return showToast('コピーする文章がありません');
       try {
-        await navigator.clipboard.writeText(txt);
+        await navigator.clipboard.writeText(el.outputText.value);
         showToast('変換後の文章をコピーしました');
-      } catch {
-        showToast('コピーに失敗しました');
-      }
+      } catch { showToast('コピーに失敗しました'); }
     });
 
     $('btnDownloadTxt').addEventListener('click', () => {
-      const txt = el.outputText.value;
-      if (!txt.trim()) return;
-      const blob = new Blob([txt], { type: 'text/plain;charset=utf-8' });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = `bunsho-rewritten-${new Date().toISOString().slice(0, 10)}.txt`;
-      document.body.appendChild(a);
-      a.click();
-      a.remove();
-      URL.revokeObjectURL(url);
+      if (!el.outputText.value.trim()) return;
+      downloadBlob(`bunsho-natural-${new Date().toISOString().slice(0, 10)}.txt`, el.outputText.value, 'text/plain;charset=utf-8');
     });
 
-    // Output tabs
-    document.querySelectorAll('.out-tab').forEach((tab) => {
-      tab.addEventListener('click', () => switchOutputTab(tab.dataset.tab));
+    $('btnDownloadDoc').addEventListener('click', () => {
+      if (!el.outputText.value.trim()) return;
+      exportWordDoc(el.outputText.value, `bunsho-natural-${new Date().toISOString().slice(0, 10)}`);
+      showToast('Word形式（.doc）で出力しました');
     });
 
-    // Output manual edit re-scoring
-    el.outputText.addEventListener('input', () => {
-      const txt = el.outputText.value.trim();
-      if (!txt) {
-        el.afterScoreText.textContent = '変換後のAI度: —';
-        return;
-      }
-      const res = window.BunshoEngine.detectAI(txt);
-      el.afterScoreText.textContent = `変換後のAI度: ${res.score}%` + (lastBeforeScore !== null ? `（変換前 ${lastBeforeScore}%）` : '');
+    $('btnApplyBack').addEventListener('click', () => {
+      if (!el.outputText.value.trim()) return;
+      el.inputText.value = el.outputText.value;
+      updateCharCount();
+      runCheck(true);
+      showToast('変換結果を原稿欄に反映して再チェックしました');
     });
 
-    // Modals
-    $('btnHistory').addEventListener('click', () => {
-      renderHistoryModal();
-      el.historyModal.classList.remove('hidden');
-    });
-
+    // History clear
     $('btnClearHistory').addEventListener('click', () => {
       history = [];
       localStorage.removeItem(HISTORY_KEY);
-      el.historyCount.textContent = '0';
-      renderHistoryModal();
+      el.navHistoryCount.textContent = '0';
+      renderHistory();
+      showToast('履歴をすべて削除しました');
     });
 
+    // Profiles
+    $('btnAddSampleField').addEventListener('click', () => {
+      const idx = el.profSamplesWrap.querySelectorAll('.prof-sample-input').length + 1;
+      const label = document.createElement('label');
+      label.className = 'ctrl-field';
+      label.innerHTML = `<span>自作文 ${idx}</span><textarea class="prof-sample-input" rows="4" placeholder="追加のサンプル文章"></textarea>`;
+      el.profSamplesWrap.appendChild(label);
+    });
+
+    $('btnSaveProfile').addEventListener('click', () => {
+      const name = el.profName.value.trim() || `マイ文体 ${profiles.length + 1}`;
+      const samples = Array.from(el.profSamplesWrap.querySelectorAll('.prof-sample-input')).map((t) => t.value.trim()).filter(Boolean);
+      if (samples.length === 0) {
+        showToast('自作文を1つ以上入力してください');
+        return;
+      }
+      const analyzed = window.BunshoEngine.analyzeProfileSamples(samples);
+      profiles.unshift(Object.assign({ id: Date.now(), name }, analyzed));
+      saveProfiles();
+      el.profName.value = '';
+      el.profSamplesWrap.querySelectorAll('.prof-sample-input').forEach((t) => { t.value = ''; });
+      renderProfiles();
+      showToast(`文体プロファイル「${name}」を保存しました`);
+    });
+
+    // Theme & Modals
+    el.btnThemeToggle.addEventListener('click', () => {
+      const next = document.documentElement.getAttribute('data-theme') === 'dark' ? 'light' : 'dark';
+      applyTheme(next);
+    });
+
+    $('btnHowTo').addEventListener('click', () => el.howToModal.classList.remove('hidden'));
     $('btnApiSettings').addEventListener('click', () => {
       el.inputApiKey.value = localStorage.getItem(API_KEY_STORAGE) || '';
       el.apiModal.classList.remove('hidden');
     });
 
     $('btnSaveApiKey').addEventListener('click', () => {
-      const key = el.inputApiKey.value.trim();
-      if (key) {
-        localStorage.setItem(API_KEY_STORAGE, key);
+      const k = el.inputApiKey.value.trim();
+      if (k) {
+        localStorage.setItem(API_KEY_STORAGE, k);
         showToast('Gemini APIキーを保存しました');
       } else {
         localStorage.removeItem(API_KEY_STORAGE);
       }
-      syncApiButton();
+      syncApiBtn();
       el.apiModal.classList.add('hidden');
     });
 
     $('btnRemoveApiKey').addEventListener('click', () => {
       localStorage.removeItem(API_KEY_STORAGE);
       el.inputApiKey.value = '';
-      syncApiButton();
+      syncApiBtn();
       el.apiModal.classList.add('hidden');
       showToast('APIキーを削除しました');
     });
 
-    document.querySelectorAll('[data-close]').forEach((btn) => {
-      btn.addEventListener('click', () => $(btn.dataset.close).classList.add('hidden'));
+    document.querySelectorAll('[data-close]').forEach((b) => {
+      b.addEventListener('click', () => $(b.dataset.close).classList.add('hidden'));
+    });
+    [el.howToModal, el.apiModal].forEach((m) => {
+      m.addEventListener('click', (e) => { if (e.target === m) m.classList.add('hidden'); });
     });
 
-    [el.historyModal, el.apiModal].forEach((m) => {
-      m.addEventListener('click', (e) => {
-        if (e.target === m) m.classList.add('hidden');
-      });
-    });
-
-    $('btnTheme').addEventListener('click', () => {
-      const next = document.documentElement.getAttribute('data-theme') === 'dark' ? 'light' : 'dark';
-      applyTheme(next);
-    });
-
-    // PWA install
+    // PWA Install & Online
     window.addEventListener('beforeinstallprompt', (e) => {
       e.preventDefault();
       deferredInstallPrompt = e;
       el.btnInstallPwa.classList.remove('hidden');
     });
-
     el.btnInstallPwa.addEventListener('click', async () => {
       if (!deferredInstallPrompt) return;
       deferredInstallPrompt.prompt();
@@ -540,12 +732,12 @@
       deferredInstallPrompt = null;
     });
 
-    const updateOnline = () => {
-      el.onlineStatus.textContent = navigator.onLine ? 'オフライン動作対応' : 'オフライン稼働中';
+    const syncOnline = () => {
+      el.onlineLabel.textContent = navigator.onLine ? 'ローカル保存' : 'オフライン稼働中';
     };
-    window.addEventListener('online', updateOnline);
-    window.addEventListener('offline', updateOnline);
-    updateOnline();
+    window.addEventListener('online', syncOnline);
+    window.addEventListener('offline', syncOnline);
+    syncOnline();
   }
 
   function registerSW() {
@@ -555,14 +747,15 @@
   }
 
   // Init
-  applyTheme(localStorage.getItem(THEME_KEY) || 'light');
+  applyTheme(localStorage.getItem(THEME_KEY) || 'dark');
   loadHistory();
-  syncApiButton();
+  loadProfiles();
+  syncApiBtn();
   bindEvents();
   registerSW();
 
-  // 初回表示時にAI記事風サンプルを読み込んで即座に判定結果を体験できるようにする
-  el.inputText.value = SAMPLES['ai-blog'];
-  updateInputCounts();
-  runDetect();
+  // 初回表示時にサンプル原稿を読み込んでチェック済み状態を表示
+  el.inputText.value = SAMPLE_TEXT;
+  updateCharCount();
+  runCheck(true);
 })();

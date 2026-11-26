@@ -1,260 +1,441 @@
 <!DOCTYPE html>
-<html lang="ja">
+<html lang="ja" data-theme="dark">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
-  <meta name="theme-color" content="#1E293B">
-  <meta name="description" content="AIが書いた文章かどうかを判定し、人間が書いたような自然な日本語に変換するPWA">
+  <meta name="theme-color" content="#13141F">
+  <meta name="description" content="AIが書いた下書きの定型表現や反復をチェックし、Word・PDF読み込み対応で人間らしい自然な日本語に整えるPWA">
   <meta name="apple-mobile-web-app-capable" content="yes">
-  <title>文脈工房 — AI文章判定＆自然文リライトPWA</title>
+  <title>文脈工房 | 日本語文章スタジオ</title>
   <link rel="manifest" href="./manifest.json">
   <link rel="icon" href="./icon.svg" type="image/svg+xml">
   <link rel="apple-touch-icon" href="./icon-192.png">
   <link rel="stylesheet" href="./styles.css">
 </head>
 <body>
-  <div class="app-shell">
-    <!-- Top Bar -->
-    <header class="topbar">
-      <div class="topbar-left">
-        <div class="brand">
-          <span class="brand-mark" aria-hidden="true">文</span>
-          <div class="brand-text">
-            <span class="brand-name">文脈工房</span>
-            <span class="brand-sub">AI文章判定 ＆ 自然文リライト</span>
-          </div>
-        </div>
-        <span id="onlineStatus" class="status-pill">オフライン動作対応</span>
-      </div>
+  <div class="layout">
+    <!-- Left Sidebar (Kotobane Base) -->
+    <aside id="sidebar" class="sidebar" aria-label="メインナビゲーション">
+      <button id="btnBrandHome" class="brand-btn" title="文脈工房 ホーム">
+        <span class="brand-badge" aria-hidden="true">文</span>
+        <span class="brand-labels">
+          <span class="brand-name">文脈工房</span>
+          <span class="brand-sub">日本語文章スタジオ</span>
+        </span>
+      </button>
 
-      <div class="topbar-right">
-        <button id="btnInstallPwa" class="pill-btn accent hidden">アプリをインストール</button>
-        <button id="btnHistory" class="ghost-btn" title="判定・変換履歴">履歴 <span id="historyCount" class="mini-badge">0</span></button>
-        <button id="btnApiSettings" class="ghost-btn" title="Gemini API連携設定（任意）">AI連携設定</button>
-        <button id="btnTheme" class="icon-btn" title="テーマ切替" aria-label="テーマ切替">
-          <svg id="iconSun" class="hidden" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg>
-          <svg id="iconMoon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
+      <nav class="nav-list" aria-label="メインナビゲーション">
+        <button class="nav-item active" data-view="studio">
+          <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/></svg>
+          <span>文章スタジオ</span>
         </button>
+        <button class="nav-item" data-view="history">
+          <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+          <span>履歴</span>
+          <span id="navHistoryCount" class="nav-pill">0</span>
+        </button>
+        <button class="nav-item" data-view="profiles">
+          <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+          <span>文体プロファイル</span>
+        </button>
+      </nav>
+
+      <div class="sidebar-bottom">
+        <button id="btnHowTo" class="sidebar-util-btn">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+          <span>使い方</span>
+        </button>
+        <p class="sidebar-note">文章分析・変換は端末内で処理</p>
       </div>
-    </header>
+    </aside>
 
-    <!-- Main Content -->
-    <main class="studio-grid">
-      <!-- Left Column: Input & Conversion Options -->
-      <section class="panel input-panel">
-        <div class="panel-head">
-          <h2>1. 判定・変換したい文章を入力</h2>
-          <div class="sample-bar">
-            <span class="sample-label">サンプル:</span>
-            <button class="chip-btn" data-sample="ai-blog">AI記事風</button>
-            <button class="chip-btn" data-sample="ai-biz">AI報告風</button>
-            <button class="chip-btn" data-sample="human">自然な文章</button>
+    <!-- Right Main Shell -->
+    <div class="main-shell">
+      <!-- Top Utility Bar -->
+      <header class="topbar" role="banner">
+        <div class="topbar-left">
+          <button id="btnMobileMenu" class="icon-btn mobile-only" aria-label="メニューを開く">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
+          </button>
+          <div class="breadcrumb">
+            <span class="crumb-root">ワークスペース</span>
+            <span class="crumb-sep">/</span>
+            <span id="crumbCurrent" class="crumb-current">文章スタジオ</span>
           </div>
         </div>
 
-        <div class="editor-wrap">
-          <textarea id="inputText" class="text-area" placeholder="ここにAIが生成した文章や、判定したい文章を貼り付けてください。&#10;&#10;オフライン完結で「AI度合い（0〜100%）」を判定し、人間らしい自然な日本語へリライトできます。"></textarea>
-          <div class="input-meta">
-            <span><strong id="inputChars">0</strong> 文字 · <strong id="inputSentences">0</strong> 文</span>
-            <div class="input-tools">
-              <button id="btnPaste" class="tiny-btn">貼り付け</button>
-              <button id="btnClear" class="tiny-btn">クリア</button>
+        <div class="topbar-right">
+          <button id="btnInstallPwa" class="outline-btn sm hidden">アプリを追加</button>
+          <span class="local-status"><i class="status-dot"></i><span id="onlineLabel">ローカル保存</span></span>
+          <button id="btnApiSettings" class="outline-btn sm" title="任意でGemini API連携を設定">AI連携</button>
+          <button id="btnThemeToggle" class="icon-btn" title="ライトモードに切り替え" aria-label="ライトモードに切り替え">
+            <svg id="iconSun" width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg>
+            <svg id="iconMoon" class="hidden" width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
+          </button>
+        </div>
+      </header>
+
+      <!-- View 1: Studio -->
+      <main id="viewStudio" class="workspace">
+        <!-- Hero Header -->
+        <div class="hero-row">
+          <div>
+            <h1>AIの文章を自然な日本語に</h1>
+            <p class="hero-desc">定型句や同じ文末の繰り返しを見つけ、主張や引用を保ちながら人間らしい自然な日本語へ整えます。</p>
+          </div>
+          <div class="hero-actions">
+            <button id="btnUseSample" class="outline-btn">サンプルを使う</button>
+          </div>
+        </div>
+
+        <!-- Primary 2-Column Grid -->
+        <div class="two-col-grid">
+          <!-- Left Card: Manuscript (原稿) -->
+          <section class="card manuscript-card" id="dropZone">
+            <div class="card-head">
+              <div class="card-title-group">
+                <h2>原稿</h2>
+                <span id="loadedFileBadge" class="file-badge hidden"></span>
+              </div>
+              <label class="outline-btn sm file-upload-btn" title="Word (.docx) / PDF (.pdf) / テキスト (.txt, .md) を読み込み">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+                <span id="uploadBtnText">ファイルを読み込む</span>
+                <input id="fileInput" type="file" accept=".docx,.pdf,.txt,.md,.doc" hidden>
+              </label>
+            </div>
+
+            <div class="underline-tabs" role="tablist" aria-label="原稿の表示">
+              <button class="u-tab active" data-editor-tab="input" role="tab" aria-selected="true">入力</button>
+              <button class="u-tab" data-editor-tab="highlight" role="tab" aria-selected="false">
+                ハイライト <span id="highlightCountBadge" class="tab-badge">0</span>
+              </button>
+            </div>
+
+            <!-- Input Mode -->
+            <div id="editorInputPane" class="editor-shell">
+              <textarea id="inputText" class="manuscript-textarea" aria-label="日本語の原稿" placeholder="自然な文章に整えたい下書きを貼り付けてください。&#10;&#10;Word（.docx）・PDF（.pdf）・テキストファイルをここにドラッグ＆ドロップしても読み込めます。"></textarea>
+              <div class="editor-footer">
+                <div class="editor-footer-left">
+                  <span id="charCountLabel" class="char-count">0 字</span>
+                  <span class="drop-hint">Word (.docx) / PDF / TXT 対応</span>
+                </div>
+                <div class="editor-footer-right">
+                  <button id="btnCopyInput" class="text-btn">原稿をコピー</button>
+                  <button id="btnExportInput" class="text-btn">原稿を出力</button>
+                </div>
+              </div>
+            </div>
+
+            <!-- Highlight Mode -->
+            <div id="editorHighlightPane" class="highlight-shell hidden">
+              <div class="cat-legend">
+                <span class="legend-chip c-phrase">定型表現</span>
+                <span class="legend-chip c-conj">接続詞</span>
+                <span class="legend-chip c-end">文末の反復</span>
+                <span class="legend-chip c-len">文長の特徴</span>
+                <span class="legend-chip c-struct">文章構成</span>
+              </div>
+              <div id="highlightCanvas" class="highlight-canvas"></div>
+              <div id="highlightReasonBox" class="reason-bar">
+                色付きの箇所を選ぶと、検出理由を確認できます。
+              </div>
+            </div>
+
+            <div class="card-actions">
+              <button id="btnCheckStyle" class="primary-btn">AI文体をチェック</button>
+              <button id="btnRewrite" class="outline-btn accent-outline">自然な文章に整える</button>
+            </div>
+          </section>
+
+          <!-- Right Card: AI Style Check (AI文体チェック) -->
+          <section class="card check-card">
+            <div class="card-head">
+              <h2>AI文体チェック</h2>
+            </div>
+
+            <div class="underline-tabs" role="tablist" aria-label="分析レポートの表示">
+              <button class="u-tab active" data-report-tab="result" role="tab" aria-selected="true">検出結果</button>
+              <button class="u-tab" data-report-tab="stats" role="tab" aria-selected="false">文章の統計</button>
+            </div>
+
+            <!-- Result Tab -->
+            <div id="reportResultPane" class="report-pane">
+              <div class="score-hero">
+                <div class="ring-wrap">
+                  <svg class="ring-svg" viewBox="0 0 110 110">
+                    <circle class="ring-track" cx="55" cy="55" r="46"/>
+                    <circle id="scoreRing" class="ring-progress" cx="55" cy="55" r="46" stroke-dasharray="289.03" stroke-dashoffset="289.03"/>
+                  </svg>
+                  <div class="ring-text">
+                    <span id="scoreNum" class="ring-num">0</span>
+                    <span class="ring-denom">/ 100</span>
+                  </div>
+                </div>
+                <div class="score-meta">
+                  <div class="score-heading-row">
+                    <h3>AI文体特徴スコア</h3>
+                    <span id="scoreStatusPill" class="verdict-pill">チェック待ち</span>
+                  </div>
+                  <p id="scoreCaption" class="score-caption">AIの下書きにも現れる定型表現や反復を集計します。</p>
+                </div>
+              </div>
+
+              <div class="meter-list">
+                <div class="meter-row">
+                  <div class="meter-head"><span>定型表現</span><strong id="valPhrase">0</strong></div>
+                  <div class="meter-track"><div id="barPhrase" class="meter-fill fill-amber" style="width:0%"></div></div>
+                </div>
+                <div class="meter-row">
+                  <div class="meter-head"><span>接続詞</span><strong id="valConj">0</strong></div>
+                  <div class="meter-track"><div id="barConj" class="meter-fill fill-indigo" style="width:0%"></div></div>
+                </div>
+                <div class="meter-row">
+                  <div class="meter-head"><span>文末の反復</span><strong id="valEnd">0</strong></div>
+                  <div class="meter-track"><div id="barEnd" class="meter-fill fill-rose" style="width:0%"></div></div>
+                </div>
+                <div class="meter-row">
+                  <div class="meter-head"><span>文長の特徴</span><strong id="valLen">0</strong></div>
+                  <div class="meter-track"><div id="barLen" class="meter-fill fill-emerald" style="width:0%"></div></div>
+                </div>
+                <div class="meter-row">
+                  <div class="meter-head"><span>文章構成</span><strong id="valStruct">0</strong></div>
+                  <div class="meter-track"><div id="barStruct" class="meter-fill fill-violet" style="width:0%"></div></div>
+                </div>
+              </div>
+
+              <div class="disclaimer-box">
+                人が書いた文章にも同じ特徴が現れます。執筆者や不正行為の判断には使えません。
+              </div>
+
+              <button id="btnViewHighlights" class="card-footer-link">
+                <span>特徴を本文で確認</span>
+                <span class="footer-link-count"><strong id="footerMatchCount">0</strong> 件 &rsaquo;</span>
+              </button>
+            </div>
+
+            <!-- Stats Tab -->
+            <div id="reportStatsPane" class="report-pane hidden">
+              <div class="stats-grid">
+                <div class="stat-tile"><span>文字数</span><strong id="stChars">0</strong></div>
+                <div class="stat-tile"><span>文の数</span><strong id="stSentences">0</strong></div>
+                <div class="stat-tile"><span>平均文長</span><strong id="stAvgLen">0 字</strong></div>
+                <div class="stat-tile"><span>段落数</span><strong id="stParagraphs">0</strong></div>
+                <div class="stat-tile"><span>文長の標準偏差</span><strong id="stStdDev">0.0</strong></div>
+                <div class="stat-tile"><span>緩急指数 (CV)</span><strong id="stCv">0.00</strong></div>
+              </div>
+
+              <div class="stat-block">
+                <h4>文の長さ分布</h4>
+                <div class="dist-row"><span>30字以下</span><div class="meter-track"><div id="dist30" class="meter-fill fill-emerald" style="width:0%"></div></div><strong id="dist30Val">0</strong></div>
+                <div class="dist-row"><span>31〜50字</span><div class="meter-track"><div id="dist50" class="meter-fill fill-indigo" style="width:0%"></div></div><strong id="dist50Val">0</strong></div>
+                <div class="dist-row"><span>51〜70字</span><div class="meter-track"><div id="dist70" class="meter-fill fill-amber" style="width:0%"></div></div><strong id="dist70Val">0</strong></div>
+                <div class="dist-row"><span>71字以上</span><div class="meter-track"><div id="dist71" class="meter-fill fill-rose" style="width:0%"></div></div><strong id="dist71Val">0</strong></div>
+              </div>
+
+              <div class="stat-block">
+                <h4>よく使われる文末表現</h4>
+                <div id="stTopEndings" class="tag-cloud"></div>
+              </div>
+
+              <div class="stat-block">
+                <h4>文頭の接続詞</h4>
+                <div id="stHeadConj" class="tag-cloud"></div>
+              </div>
+            </div>
+          </section>
+        </div>
+
+        <!-- Lower Full-Width Card: Natural Rewrite Workspace (自然な文章に整える) -->
+        <section class="card rewrite-card" id="rewriteSection">
+          <div class="card-head">
+            <div class="card-title-group">
+              <h2>自然な文章に整える</h2>
+              <span id="rewriteDeltaBadge" class="delta-pill hidden"></span>
+            </div>
+            <div class="rewrite-head-actions">
+              <button id="btnAiRewrite" class="outline-btn sm hidden">高度AIリライト (Gemini)</button>
+              <button id="btnRunRewrite2" class="primary-btn sm">リライトを実行</button>
             </div>
           </div>
-        </div>
 
-        <!-- Conversion Settings -->
-        <div class="options-card">
-          <div class="options-row">
-            <label class="opt-field">
-              <span>変換強度</span>
-              <select id="optStrength">
-                <option value="gentle">控えめ（定型句のみ調整）</option>
-                <option value="standard" selected>標準（自然な読み心地）</option>
-                <option value="strong">強め（リズム・文長も調整）</option>
+          <div class="rewrite-controls">
+            <label class="ctrl-field">
+              <span>文体プリセット</span>
+              <select id="optPreset">
+                <option value="report-dearu" selected>大学生のレポート（だ・である）</option>
+                <option value="report-polite">大学生のレポート（です・ます）</option>
+                <option value="general">一般・ブログ（親しみやすい）</option>
+                <option value="academic">学術・論文調</option>
+                <option value="business">ビジネス文書</option>
+                <option value="profile">自分の文体（プロファイル参照）</option>
               </select>
             </label>
-            <label class="opt-field">
-              <span>出力の文体</span>
-              <select id="optTone">
-                <option value="keep" selected>元の文体を維持</option>
-                <option value="polite">丁寧（です・ます）</option>
-                <option value="casual">親しみやすい話し言葉寄り</option>
-                <option value="dearu">引き締まった「だ・である」</option>
-              </select>
+
+            <label class="ctrl-field">
+              <span>変更度: <strong id="intensityVal">60</strong></span>
+              <input id="optIntensity" type="range" min="10" max="100" step="10" value="60">
             </label>
-          </div>
 
-          <div class="checks-row">
-            <label class="check-item"><input type="checkbox" id="chkSoften" checked> AI定型句・翻訳調をやわらげる</label>
-            <label class="check-item"><input type="checkbox" id="chkMarkdown" checked> 過剰な太字・箇条書きを自然化</label>
-            <label class="check-item"><input type="checkbox" id="chkEndings" checked> 語尾の単調さ・連続を解消</label>
-          </div>
-        </div>
-
-        <!-- Primary Action Buttons -->
-        <div class="action-bar">
-          <button id="btnDetect" class="secondary-btn lg">AI度合いを判定</button>
-          <button id="btnHumanize" class="primary-btn lg">人間らしい文章に変換</button>
-          <button id="btnAiRewrite" class="indigo-btn lg hidden" title="設定したGemini APIで高度な文脈リライトを実行">高度AIリライト</button>
-        </div>
-      </section>
-
-      <!-- Right Column: Detection Dashboard & Humanized Output -->
-      <section class="panel result-panel">
-        <!-- Score Dashboard -->
-        <div class="score-card">
-          <div class="score-main">
-            <div class="gauge-wrap">
-              <svg class="gauge-svg" viewBox="0 0 120 120">
-                <circle class="gauge-bg" cx="60" cy="60" r="50"/>
-                <circle id="gaugeArc" class="gauge-arc" cx="60" cy="60" r="50" stroke-dasharray="314.16" stroke-dashoffset="314.16"/>
-              </svg>
-              <div class="gauge-center">
-                <span id="scoreValue" class="gauge-num">—</span>
-                <span class="gauge-unit">AI度</span>
-              </div>
+            <div class="ctrl-checks">
+              <label class="chk-pill"><input type="checkbox" id="chkKeepQuotes" checked> 引用・専門用語を維持</label>
+              <label class="chk-pill"><input type="checkbox" id="chkRemoveMd" checked> 過剰な太字・箇条書を自然化</label>
+              <label class="chk-pill"><input type="checkbox" id="chkVaryEndings" checked> 文末の反復を解消</label>
             </div>
+          </div>
 
-            <div class="score-info">
-              <div class="score-title-row">
-                <span id="scoreLabel" class="score-badge level-none">判定待ち</span>
-                <span id="scoreDelta" class="delta-badge hidden"></span>
-              </div>
-              <p id="scoreSummary" class="score-summary">左側に文章を入力して「AI度合いを判定」または「人間らしい文章に変換」を押してください。</p>
-              <div class="mini-stats">
-                <span>平均文長: <strong id="statAvgLen">0</strong>字</span>
-                <span>·</span>
-                <span>文長の緩急(CV): <strong id="statBurst">0.00</strong></span>
-                <span>·</span>
-                <span>AI特徴検出: <strong id="statMatches">0</strong>箇所</span>
+          <div class="underline-tabs" role="tablist" aria-label="リライト結果の表示">
+            <button class="u-tab active" data-out-tab="result" role="tab" aria-selected="true">変換後の文章</button>
+            <button class="u-tab" data-out-tab="diff" role="tab" aria-selected="false">差分比較（Before / After）</button>
+            <button class="u-tab" data-out-tab="changes" role="tab" aria-selected="false">
+              変更点 <span id="changeCountBadge" class="tab-badge">0</span>
+            </button>
+          </div>
+
+          <!-- Output Result -->
+          <div id="outResultPane" class="out-pane">
+            <textarea id="outputText" class="manuscript-textarea output-ta" placeholder="「自然な文章に整える」を押すと、ここに人間らしい自然な日本語へリライトされた文章が表示されます。"></textarea>
+            <div class="editor-footer">
+              <span id="afterScoreCaption" class="char-count">変換後のAI文体スコア: —</span>
+              <div class="editor-footer-right">
+                <button id="btnVariant" class="text-btn">別パターン</button>
+                <button id="btnApplyBack" class="text-btn">原稿欄に反映</button>
+                <button id="btnDownloadDoc" class="text-btn">Word出力(.doc)</button>
+                <button id="btnDownloadTxt" class="text-btn">テキスト出力</button>
+                <button id="btnCopyOutput" class="primary-btn xs">コピー</button>
               </div>
             </div>
           </div>
 
-          <!-- 6 Metrics Bars -->
-          <div class="metrics-grid">
-            <div class="m-item">
-              <div class="m-head"><span>AI定型フレーズ</span><strong id="mPhrase">0%</strong></div>
-              <div class="m-bar"><div id="barPhrase" class="m-fill" style="width:0%"></div></div>
+          <!-- Output Diff -->
+          <div id="outDiffPane" class="out-pane hidden">
+            <div class="diff-legend">
+              <span><del class="diff-del">変更前</del></span>
+              <span><ins class="diff-ins">変更後</ins></span>
             </div>
-            <div class="m-item">
-              <div class="m-head"><span>構成の定型化</span><strong id="mStructure">0%</strong></div>
-              <div class="m-bar"><div id="barStructure" class="m-fill" style="width:0%"></div></div>
-            </div>
-            <div class="m-item">
-              <div class="m-head"><span>翻訳調・冗長表現</span><strong id="mTranslation">0%</strong></div>
-              <div class="m-bar"><div id="barTranslation" class="m-fill" style="width:0%"></div></div>
-            </div>
-            <div class="m-item">
-              <div class="m-head"><span>文長の均一性</span><strong id="mUniformity">0%</strong></div>
-              <div class="m-bar"><div id="barUniformity" class="m-fill" style="width:0%"></div></div>
-            </div>
-            <div class="m-item">
-              <div class="m-head"><span>語尾の単調さ</span><strong id="mEnding">0%</strong></div>
-              <div class="m-bar"><div id="barEnding" class="m-fill" style="width:0%"></div></div>
-            </div>
-            <div class="m-item">
-              <div class="m-head"><span>過剰装飾・箇条書</span><strong id="mFormatting">0%</strong></div>
-              <div class="m-bar"><div id="barFormatting" class="m-fill" style="width:0%"></div></div>
-            </div>
-          </div>
-        </div>
-
-        <!-- Output Tabs -->
-        <div class="output-card">
-          <div class="output-tabs" role="tablist">
-            <button class="out-tab active" data-tab="humanized" role="tab" aria-selected="true">変換後の文章</button>
-            <button class="out-tab" data-tab="highlight" role="tab" aria-selected="false">AI箇所ハイライト</button>
-            <button class="out-tab" data-tab="diff" role="tab" aria-selected="false">差分比較</button>
-            <button class="out-tab" data-tab="changes" role="tab" aria-selected="false">変更点 <span id="changeCount" class="mini-badge">0</span></button>
+            <div id="diffCanvas" class="rich-canvas">変換を実行すると、変更前後の差分が表示されます。</div>
           </div>
 
-          <!-- Tab: Humanized Result -->
-          <div id="paneHumanized" class="out-pane">
-            <textarea id="outputText" class="text-area output-area" placeholder="「人間らしい文章に変換」を押すと、ここに自然な日本語へリライトされた文章が表示されます。そのまま手直しもできます。"></textarea>
-            <div class="output-footer">
-              <span id="afterScoreText" class="after-score">変換後のAI度: —</span>
-              <div class="output-actions">
-                <button id="btnRetryVariant" class="tiny-btn" title="別の言い換えパターンで再変換">別パターン</button>
-                <button id="btnApplyToInput" class="tiny-btn" title="変換結果を入力欄へ戻して再判定">入力へ戻す</button>
-                <button id="btnDownloadTxt" class="tiny-btn">保存(.txt)</button>
-                <button id="btnCopyOutput" class="primary-btn sm">コピー</button>
-              </div>
-            </div>
-          </div>
-
-          <!-- Tab: AI Highlight -->
-          <div id="paneHighlight" class="out-pane hidden">
-            <div class="legend-row">
-              <span><mark class="hl-high">強いAI特徴</mark></span>
-              <span><mark class="hl-mid">中程度のAI特徴</mark></span>
-              <span><mark class="hl-low">軽度の傾向</mark></span>
-              <span class="hint">※色付き部分にカーソルを合わせると理由を表示</span>
-            </div>
-            <div id="highlightBox" class="rich-box">判定を実行すると、AIらしい表現が色分け表示されます。</div>
-          </div>
-
-          <!-- Tab: Diff -->
-          <div id="paneDiff" class="out-pane hidden">
-            <div class="legend-row">
-              <span><del class="diff-del">削除・元の表現</del></span>
-              <span><ins class="diff-ins">変換後の自然な表現</ins></span>
-            </div>
-            <div id="diffBox" class="rich-box">変換を実行すると、Before / After の差分が表示されます。</div>
-          </div>
-
-          <!-- Tab: Changes -->
-          <div id="paneChanges" class="out-pane hidden">
+          <!-- Output Changes -->
+          <div id="outChangesPane" class="out-pane hidden">
             <ul id="changesList" class="changes-list">
-              <li class="empty-msg">まだ変換履歴がありません。</li>
+              <li class="empty-note">まだ変換履歴がありません。</li>
             </ul>
           </div>
+        </section>
+      </main>
+
+      <!-- View 2: History (履歴) -->
+      <main id="viewHistory" class="workspace hidden">
+        <div class="hero-row">
+          <div>
+            <h1>履歴</h1>
+            <p class="hero-desc">このブラウザーに保存した分析とリライトを開きます。</p>
+          </div>
+          <div class="hero-actions">
+            <button id="btnClearHistory" class="outline-btn">履歴をすべて削除</button>
+          </div>
         </div>
-      </section>
-    </main>
+        <div id="historyContainer" class="history-grid"></div>
+      </main>
+
+      <!-- View 3: Style Profiles (文体プロファイル) -->
+      <main id="viewProfiles" class="workspace hidden">
+        <div class="hero-row">
+          <div>
+            <h1>文体プロファイル</h1>
+            <p class="hero-desc">自作文の文長や文末の傾向を抽出し、リライト時に「自分の文体」として参照できます。</p>
+          </div>
+        </div>
+
+        <div class="two-col-grid">
+          <section class="card">
+            <div class="card-head">
+              <h2>プロファイルを作成</h2>
+            </div>
+            <div class="profile-form">
+              <label class="ctrl-field">
+                <span>プロファイル名</span>
+                <input id="profName" type="text" placeholder="例: 大学レポート用（自分の文体）">
+              </label>
+              <div id="profSamplesWrap" class="prof-samples">
+                <label class="ctrl-field">
+                  <span>自作文 1</span>
+                  <textarea class="prof-sample-input" rows="4" placeholder="過去に自分で書いたレポートや文章を貼り付けてください"></textarea>
+                </label>
+                <label class="ctrl-field">
+                  <span>自作文 2</span>
+                  <textarea class="prof-sample-input" rows="4" placeholder="2つ目のサンプル（任意）"></textarea>
+                </label>
+              </div>
+              <div class="card-actions">
+                <button id="btnAddSampleField" class="outline-btn">自作文を追加</button>
+                <button id="btnSaveProfile" class="primary-btn">プロファイルを保存</button>
+              </div>
+            </div>
+          </section>
+
+          <section class="card">
+            <div class="card-head">
+              <h2>保存済みのプロファイル</h2>
+            </div>
+            <div id="profileList" class="profile-list"></div>
+          </section>
+        </div>
+      </main>
+    </div>
   </div>
 
-  <!-- History Drawer Modal -->
-  <div id="historyModal" class="modal hidden" role="dialog" aria-modal="true" aria-labelledby="historyModalTitle">
+  <!-- Mobile Backdrop -->
+  <div id="mobileBackdrop" class="backdrop hidden"></div>
+
+  <!-- How-To Modal -->
+  <div id="howToModal" class="modal hidden" role="dialog" aria-modal="true" aria-labelledby="howToTitle">
     <div class="modal-card">
       <div class="modal-head">
-        <h3 id="historyModalTitle">判定・変換履歴</h3>
-        <div class="modal-head-actions">
-          <button id="btnClearHistory" class="tiny-btn danger">すべて削除</button>
-          <button class="icon-btn" data-close="historyModal" aria-label="閉じる">✕</button>
-        </div>
+        <h3 id="howToTitle">文脈工房の使い方</h3>
+        <button class="icon-btn" data-close="howToModal" aria-label="閉じる">✕</button>
       </div>
-      <div id="historyList" class="history-list"></div>
+      <div class="modal-body">
+        <ol class="howto-list">
+          <li><strong>原稿を用意する</strong>：テキストを直接貼り付けるか、「ファイルを読み込む」（またはドラッグ＆ドロップ）で <strong>Word（.docx）・PDF（.pdf）・テキスト</strong> を読み込みます。</li>
+          <li><strong>AI文体をチェック</strong>：5つの指標（定型表現・接続詞・文末の反復・文長の特徴・文章構成）でスコア化し、本文ハイライトで理由を確認できます。</li>
+          <li><strong>自然な文章に整える</strong>：文体プリセットや変更度を選んでリライトを実行。オフラインでも即座に自然な日本語へ整え、差分比較・Word/テキスト出力ができます。</li>
+          <li><strong>文体プロファイル</strong>：過去の自作文を登録しておくと、「自分の文体」プリセットで文体傾向を反映できます。</li>
+        </ol>
+      </div>
+      <div class="modal-foot">
+        <button class="primary-btn sm" data-close="howToModal">閉じる</button>
+      </div>
     </div>
   </div>
 
   <!-- Optional API Settings Modal -->
-  <div id="apiModal" class="modal hidden" role="dialog" aria-modal="true" aria-labelledby="apiModalTitle">
+  <div id="apiModal" class="modal hidden" role="dialog" aria-modal="true" aria-labelledby="apiTitle">
     <div class="modal-card">
       <div class="modal-head">
-        <h3 id="apiModalTitle">高度なAIリライト設定（任意）</h3>
+        <h3 id="apiTitle">AI連携設定（任意）</h3>
         <button class="icon-btn" data-close="apiModal" aria-label="閉じる">✕</button>
       </div>
       <div class="modal-body">
-        <p class="helper-text">
-          基本のAI判定＆自然文変換は<strong>APIキー不要・完全オフライン</strong>で動作します。<br>
-          さらに高度な文脈リライトを使いたい場合のみ、ご自身の Gemini API キーを設定してください（キーはお使いのブラウザの localStorage のみに保存され、外部サーバーへ保存されません）。
+        <p class="modal-desc">
+          通常のAI文体チェックおよび自然文リライトは<strong>APIキー不要・端末内完結</strong>で動作します。<br>
+          さらに高度な文脈リライトを行いたい場合のみ、ご自身の Gemini API キーを設定してください（お使いのブラウザーの localStorage のみに保存されます）。
         </p>
-        <label class="opt-field">
-          <span>Gemini API キー（任意）</span>
+        <label class="ctrl-field">
+          <span>Gemini API キー</span>
           <input id="inputApiKey" type="password" placeholder="AIza...">
         </label>
-        <div class="modal-footer-btns">
-          <button id="btnRemoveApiKey" class="secondary-btn">キーを削除</button>
-          <button id="btnSaveApiKey" class="primary-btn">保存する</button>
-        </div>
+      </div>
+      <div class="modal-foot">
+        <button id="btnRemoveApiKey" class="outline-btn sm">削除</button>
+        <button id="btnSaveApiKey" class="primary-btn sm">保存する</button>
       </div>
     </div>
   </div>
 
   <div id="toast" class="toast hidden" role="status" aria-live="polite"></div>
 
+  <script src="./file-importer.js"></script>
   <script src="./analyzer.js"></script>
   <script src="./app.js"></script>
 </body>

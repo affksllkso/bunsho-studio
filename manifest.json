@@ -1,12 +1,12 @@
 {
-  "name": "文脈工房 — AI文章判定＆自然文リライト",
+  "name": "文脈工房 — 日本語文章スタジオ",
   "short_name": "文脈工房",
-  "description": "AIが書いた文章かどうかを判定し、人間が書いたような自然な日本語に変換するPWA",
+  "description": "AI文体チェック・Word/PDF読み込み・人間らしい自然な日本語へのリライトPWA",
   "start_url": "./",
   "scope": "./",
   "display": "standalone",
-  "background_color": "#F4F1EA",
-  "theme_color": "#1E293B",
+  "background_color": "#13141F",
+  "theme_color": "#13141F",
   "lang": "ja",
   "icons": [
     {
