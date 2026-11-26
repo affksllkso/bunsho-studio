@@ -1086,10 +1086,10 @@
   bindEvents();
   registerSW();
 
-  // 初回表示時にサンプル原稿を読み込んでチェック済み状態を表示
-  el.inputText.value = SAMPLE_TEXT;
+  // 初期表示は空の原稿から開始（必要なときのみ「サンプルを使う」で読込）
+  el.inputText.value = '';
   updateCharCount();
-  runCheck(true);
+  renderDetection(window.BunshoEngine.detectAI(''));
 
   // Launch Splash fade-out
   const splash = $('splashScreen');
