@@ -16,22 +16,37 @@
       name: 'Gemini',
       keyLabel: 'Gemini API キー',
       placeholder: 'AIza...',
-      defaultModel: 'gemini-2.0-flash',
-      note: 'Google AI Studio で取得した Gemini API キーを使用します。'
+      defaultModel: 'gemini-4-hydrogen',
+      presets: [
+        { label: 'Gemini 4 Hydrogen', id: 'gemini-4-hydrogen' },
+        { label: 'Gemini 4 Neon', id: 'gemini-4-neon' },
+        { label: 'Gemini 2.5 Flash', id: 'gemini-2.5-flash' }
+      ],
+      note: 'Google AI Studio で取得した Gemini API キーを使用します（標準: gemini-4-hydrogen）。'
     },
     openai: {
       name: 'ChatGPT',
       keyLabel: 'OpenAI API キー',
       placeholder: 'sk-...',
-      defaultModel: 'gpt-4o-mini',
-      note: 'OpenAI Platform で取得した API キーを使用します（例: gpt-4o-mini / gpt-4.1-mini / gpt-4o）。'
+      defaultModel: 'gpt-6.2-sol',
+      presets: [
+        { label: 'Sol 6.2', id: 'gpt-6.2-sol' },
+        { label: 'GPT-6.2', id: 'gpt-6.2' },
+        { label: 'GPT-4o mini', id: 'gpt-4o-mini' }
+      ],
+      note: 'OpenAI Platform で取得した API キーを使用します（標準: gpt-6.2-sol）。'
     },
     claude: {
       name: 'Claude',
       keyLabel: 'Anthropic API キー',
       placeholder: 'sk-ant-...',
-      defaultModel: 'claude-3-5-sonnet-latest',
-      note: 'Anthropic Console で取得した API キーを使用します（ブラウザー直接接続ヘッダー対応）。'
+      defaultModel: 'claude-sonnet-5-5',
+      presets: [
+        { label: 'Claude Sonnet 5.5', id: 'claude-sonnet-5-5' },
+        { label: 'Claude Sonnet 4.5', id: 'claude-sonnet-4-5' },
+        { label: 'Claude 3.5 Haiku', id: 'claude-3-5-haiku-latest' }
+      ],
+      note: 'Anthropic Console で取得した API キーを使用します（標準: claude-sonnet-5-5／ブラウザー直接接続対応）。'
     }
   };
 
@@ -150,6 +165,7 @@
     apiKeyLabel: $('apiKeyLabel'),
     inputApiKey: $('inputApiKey'),
     inputApiModel: $('inputApiModel'),
+    modelPresets: $('modelPresets'),
     providerNote: $('providerNote'),
     toast: $('toast')
   };
@@ -407,6 +423,10 @@
           },
           parsed.models || {}
         );
+        // 旧デフォルトからの自動アップグレード
+        if (aiConfig.models.gemini === 'gemini-2.0-flash') aiConfig.models.gemini = AI_PROVIDERS.gemini.defaultModel;
+        if (aiConfig.models.openai === 'gpt-4o-mini') aiConfig.models.openai = AI_PROVIDERS.openai.defaultModel;
+        if (aiConfig.models.claude === 'claude-3-5-sonnet-latest') aiConfig.models.claude = AI_PROVIDERS.claude.defaultModel;
       } else {
         const legacy = localStorage.getItem(LEGACY_GEMINI_KEY);
         if (legacy) aiConfig.keys.gemini = legacy;
@@ -590,8 +610,22 @@
     el.inputApiKey.placeholder = meta.placeholder;
     el.inputApiKey.value = aiConfig.keys[provider] || '';
     el.inputApiModel.placeholder = meta.defaultModel;
-    el.inputApiModel.value = aiConfig.models[provider] || meta.defaultModel;
+    const currentModel = aiConfig.models[provider] || meta.defaultModel;
+    el.inputApiModel.value = currentModel;
     el.providerNote.textContent = meta.note;
+
+    el.modelPresets.innerHTML = '';
+    (meta.presets || []).forEach((preset) => {
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'model-chip' + (preset.id === currentModel ? ' active' : '');
+      btn.textContent = `${preset.label} (${preset.id})`;
+      btn.addEventListener('click', () => {
+        el.inputApiModel.value = preset.id;
+        el.modelPresets.querySelectorAll('.model-chip').forEach((c) => c.classList.toggle('active', c === btn));
+      });
+      el.modelPresets.appendChild(btn);
+    });
   }
 
   function openApiModal(provider) {
