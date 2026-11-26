@@ -1,11 +1,11 @@
 {
-  "name": "文脈工房 — Bunsho Studio",
+  "name": "文脈工房 — AI文章判定＆自然文リライト",
   "short_name": "文脈工房",
-  "description": "文脈を設計し、言葉を磨く日本語ライティング＆推敲PWA",
+  "description": "AIが書いた文章かどうかを判定し、人間が書いたような自然な日本語に変換するPWA",
   "start_url": "./",
   "scope": "./",
   "display": "standalone",
-  "background_color": "#F7F4EE",
+  "background_color": "#F4F1EA",
   "theme_color": "#1E293B",
   "lang": "ja",
   "icons": [

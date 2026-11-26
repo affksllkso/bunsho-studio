@@ -4,311 +4,255 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
   <meta name="theme-color" content="#1E293B">
-  <meta name="description" content="文脈を設計し、言葉を磨く日本語ライティング＆推敲PWA">
+  <meta name="description" content="AIが書いた文章かどうかを判定し、人間が書いたような自然な日本語に変換するPWA">
   <meta name="apple-mobile-web-app-capable" content="yes">
-  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-  <title>文脈工房 — Bunsho Studio</title>
+  <title>文脈工房 — AI文章判定＆自然文リライトPWA</title>
   <link rel="manifest" href="./manifest.json">
   <link rel="icon" href="./icon.svg" type="image/svg+xml">
   <link rel="apple-touch-icon" href="./icon-192.png">
   <link rel="stylesheet" href="./styles.css">
 </head>
 <body>
-  <div id="app" class="app-shell">
-    <!-- Top Header -->
+  <div class="app-shell">
+    <!-- Top Bar -->
     <header class="topbar">
       <div class="topbar-left">
-        <button id="btnToggleSidebar" class="icon-btn" title="文書一覧を開閉" aria-label="文書一覧を開閉">
-          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
-        </button>
         <div class="brand">
           <span class="brand-mark" aria-hidden="true">文</span>
           <div class="brand-text">
             <span class="brand-name">文脈工房</span>
-            <span class="brand-sub">Bunsho Studio</span>
+            <span class="brand-sub">AI文章判定 ＆ 自然文リライト</span>
           </div>
         </div>
-        <span id="saveIndicator" class="save-badge" aria-live="polite">保存済み</span>
-      </div>
-
-      <div class="topbar-center">
-        <div class="mode-switch" role="tablist" aria-label="表示モード">
-          <button id="modeEdit" class="mode-btn active" data-mode="edit" role="tab" aria-selected="true">執筆</button>
-          <button id="modePreview" class="mode-btn" data-mode="preview" role="tab" aria-selected="false">横プレビュー</button>
-          <button id="modeVertical" class="mode-btn" data-mode="vertical" role="tab" aria-selected="false">縦書き</button>
-        </div>
+        <span id="onlineStatus" class="status-pill">オフライン動作対応</span>
       </div>
 
       <div class="topbar-right">
-        <button id="btnInstallPwa" class="pill-btn accent hidden" title="アプリをインストール">インストール</button>
-        <button id="btnFocusMode" class="icon-btn" title="集中モード (Ctrl+Shift+F)" aria-label="集中モード切替">
-          <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3"/></svg>
-        </button>
-        <button id="btnTheme" class="icon-btn" title="テーマ切替（生成り / 夜更け）" aria-label="テーマ切替">
-          <svg id="iconSun" class="hidden" width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg>
-          <svg id="iconMoon" width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
-        </button>
-        <button id="btnExportMenu" class="icon-btn" title="書き出し・バックアップ" aria-label="書き出し・バックアップ">
-          <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
-        </button>
-        <button id="btnToggleInspector" class="icon-btn active" title="文脈・推敲パネルを開閉" aria-label="文脈・推敲パネルを開閉">
-          <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><line x1="15" y1="3" x2="15" y2="21"/></svg>
+        <button id="btnInstallPwa" class="pill-btn accent hidden">アプリをインストール</button>
+        <button id="btnHistory" class="ghost-btn" title="判定・変換履歴">履歴 <span id="historyCount" class="mini-badge">0</span></button>
+        <button id="btnApiSettings" class="ghost-btn" title="Gemini API連携設定（任意）">AI連携設定</button>
+        <button id="btnTheme" class="icon-btn" title="テーマ切替" aria-label="テーマ切替">
+          <svg id="iconSun" class="hidden" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg>
+          <svg id="iconMoon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
         </button>
       </div>
     </header>
 
-    <!-- Main 3-Pane Workspace -->
-    <div class="workspace">
-      <!-- Left Sidebar: Document Library -->
-      <aside id="sidebar" class="sidebar" aria-label="文書一覧">
-        <div class="sidebar-header">
-          <button id="btnNewDoc" class="primary-btn full-width">＋ 新しい原稿</button>
-          <button id="btnTemplateModal" class="secondary-btn" title="テンプレートから作成">雛形</button>
-        </div>
-        <div class="sidebar-search">
-          <input id="docSearch" type="search" placeholder="タイトル・本文・タグを検索..." aria-label="文書を検索">
-          <select id="docCategoryFilter" aria-label="カテゴリ絞り込み">
-            <option value="all">すべて</option>
-            <option value="エッセイ">エッセイ</option>
-            <option value="ブログ">ブログ</option>
-            <option value="ビジネス">ビジネス</option>
-            <option value="企画書">企画書</option>
-            <option value="小説">小説</option>
-            <option value="メモ">メモ</option>
-          </select>
-        </div>
-        <ul id="docList" class="doc-list"></ul>
-        <div class="sidebar-footer">
-          <span id="docCountSummary">0件の原稿</span>
-          <span class="offline-pill" id="onlineStatus">オンライン</span>
-        </div>
-      </aside>
-
-      <!-- Center: Writing Studio -->
-      <main class="editor-stage">
-        <div class="editor-toolbar" id="editorToolbar">
-          <div class="toolbar-group">
-            <button class="tool-btn" data-insert="heading" title="見出し (## )">H2</button>
-            <button class="tool-btn" data-insert="subheading" title="小見出し (### )">H3</button>
-            <button class="tool-btn" data-insert="bold" title="太字 (**...**)"><strong>B</strong></button>
-            <button class="tool-btn" data-insert="quote" title="引用 (> )">引用</button>
-            <button class="tool-btn" data-insert="list" title="箇条書き (- )">箇条書</button>
-            <button class="tool-btn" data-insert="ruby" title="ルビ (｜漢字《かんじ》)">ルビ</button>
-            <button class="tool-btn" data-insert="hr" title="区切り線">―</button>
-          </div>
-          <div class="toolbar-group right">
-            <select id="docCategory" class="inline-select" aria-label="カテゴリ">
-              <option value="エッセイ">エッセイ</option>
-              <option value="ブログ">ブログ</option>
-              <option value="ビジネス">ビジネス</option>
-              <option value="企画書">企画書</option>
-              <option value="小説">小説</option>
-              <option value="メモ">メモ</option>
-            </select>
-            <button id="btnFontFamily" class="tool-btn" title="書体切替（明朝 / ゴシック）">明朝</button>
-            <button id="btnCopyText" class="tool-btn" title="本文をコピー">コピー</button>
+    <!-- Main Content -->
+    <main class="studio-grid">
+      <!-- Left Column: Input & Conversion Options -->
+      <section class="panel input-panel">
+        <div class="panel-head">
+          <h2>1. 判定・変換したい文章を入力</h2>
+          <div class="sample-bar">
+            <span class="sample-label">サンプル:</span>
+            <button class="chip-btn" data-sample="ai-blog">AI記事風</button>
+            <button class="chip-btn" data-sample="ai-biz">AI報告風</button>
+            <button class="chip-btn" data-sample="human">自然な文章</button>
           </div>
         </div>
 
-        <div class="paper-container" id="paperContainer">
-          <!-- Edit View -->
-          <div class="paper-sheet" id="editView">
-            <input id="docTitle" class="doc-title-input" type="text" placeholder="無題の原稿" aria-label="原稿タイトル">
-            <div class="context-ribbon" id="contextRibbon">
-              <span class="ribbon-item" id="ribbonAudience">読者: 未設定</span>
-              <span class="ribbon-dot">·</span>
-              <span class="ribbon-item" id="ribbonTone">文体: です・ます</span>
-              <span class="ribbon-dot">·</span>
-              <span class="ribbon-item" id="ribbonGoal">目的: 未設定</span>
+        <div class="editor-wrap">
+          <textarea id="inputText" class="text-area" placeholder="ここにAIが生成した文章や、判定したい文章を貼り付けてください。&#10;&#10;オフライン完結で「AI度合い（0〜100%）」を判定し、人間らしい自然な日本語へリライトできます。"></textarea>
+          <div class="input-meta">
+            <span><strong id="inputChars">0</strong> 文字 · <strong id="inputSentences">0</strong> 文</span>
+            <div class="input-tools">
+              <button id="btnPaste" class="tiny-btn">貼り付け</button>
+              <button id="btnClear" class="tiny-btn">クリア</button>
             </div>
-            <textarea id="docBody" class="doc-body-input" placeholder="ここに言葉を紡いでください。&#10;&#10;右パネルの「文脈」で読者・目的・構成ブロックを整えると、ぶれない文章が書けます。" spellcheck="false"></textarea>
-          </div>
-
-          <!-- Horizontal Preview View -->
-          <article class="paper-sheet preview-sheet hidden" id="previewView"></article>
-
-          <!-- Vertical Preview View -->
-          <div class="vertical-stage hidden" id="verticalView">
-            <article class="vertical-sheet" id="verticalSheet"></article>
           </div>
         </div>
 
-        <!-- Bottom Metrics Bar -->
-        <footer class="metrics-bar">
-          <div class="metrics-left">
-            <span class="metric"><strong id="metricChars">0</strong> 文字</span>
-            <span class="metric-sep">/</span>
-            <span class="metric" title="空白・改行を除いた文字数">正味 <strong id="metricNetChars">0</strong></span>
-            <span class="metric-sep">·</span>
-            <span class="metric">400字詰 <strong id="metricManuscript">0.0</strong> 枚</span>
-            <span class="metric-sep">·</span>
-            <span class="metric">約 <strong id="metricReadTime">1</strong> 分</span>
-            <span class="metric-sep">·</span>
-            <span class="metric"><strong id="metricSentences">0</strong> 文</span>
-          </div>
-          <div class="metrics-right">
-            <label class="target-wrap" title="目標文字数">
-              目標
-              <input id="targetCharsInput" type="number" min="0" step="100" value="1200" aria-label="目標文字数">
-            </label>
-            <div class="progress-track" aria-label="目標達成率">
-              <div id="targetProgressFill" class="progress-fill" style="width: 0%"></div>
-            </div>
-            <span id="targetPercent" class="metric-pct">0%</span>
-          </div>
-        </footer>
-      </main>
-
-      <!-- Right Panel: Context / Proofread / Snapshots -->
-      <aside id="inspector" class="inspector" aria-label="文脈・推敲パネル">
-        <div class="inspector-tabs" role="tablist">
-          <button class="insp-tab active" data-tab="context" role="tab" aria-selected="true">文脈設計</button>
-          <button class="insp-tab" data-tab="proofread" role="tab" aria-selected="false">
-            推敲 <span id="issueCountBadge" class="badge-count">0</span>
-          </button>
-          <button class="insp-tab" data-tab="snapshots" role="tab" aria-selected="false">版管理</button>
-        </div>
-
-        <!-- Tab 1: Context Design -->
-        <section id="tabContext" class="insp-panel active">
-          <div class="panel-section">
-            <h3 class="section-title">文脈カード</h3>
-            <div class="field-group">
-              <label for="ctxAudience">想定読者（誰に届けるか）</label>
-              <input id="ctxAudience" type="text" placeholder="例: 企画立案に悩む20〜30代のビジネスパーソン">
-            </div>
-            <div class="field-group">
-              <label for="ctxGoal">目的（読了後の変化）</label>
-              <input id="ctxGoal" type="text" placeholder="例: 構成メモから書き始める習慣を試したくなる">
-            </div>
-            <div class="field-group">
-              <label for="ctxTone">文体・トーン</label>
-              <select id="ctxTone">
-                <option value="desu-masu">敬体（です・ます）</option>
-                <option value="da-dearu">常体（だ・である）</option>
-                <option value="free">自由（混在を許容）</option>
+        <!-- Conversion Settings -->
+        <div class="options-card">
+          <div class="options-row">
+            <label class="opt-field">
+              <span>変換強度</span>
+              <select id="optStrength">
+                <option value="gentle">控えめ（定型句のみ調整）</option>
+                <option value="standard" selected>標準（自然な読み心地）</option>
+                <option value="strong">強め（リズム・文長も調整）</option>
               </select>
-            </div>
-            <div class="field-group">
-              <label for="ctxCore">核となるメッセージ（一文要約）</label>
-              <textarea id="ctxCore" rows="2" placeholder="この文章で一番伝えたいことを一文で"></textarea>
-            </div>
-          </div>
-
-          <div class="panel-section">
-            <div class="section-head">
-              <h3 class="section-title">構成ブロック</h3>
-              <button id="btnAddBlock" class="tiny-btn">＋ 追加</button>
-            </div>
-            <div id="outlineList" class="outline-list"></div>
-          </div>
-
-          <div class="panel-section">
-            <div class="section-head">
-              <h3 class="section-title">表記ルール（カスタム辞書）</h3>
-              <button id="btnAddRule" class="tiny-btn">＋ 追加</button>
-            </div>
-            <p class="helper-text">本文内で「誤・旧表記」を自動検出し、ワンクリックで統一できます。</p>
-            <div id="customRuleList" class="rule-list"></div>
-          </div>
-        </section>
-
-        <!-- Tab 2: Proofread / Analyzer -->
-        <section id="tabProofread" class="insp-panel hidden">
-          <div class="panel-section">
-            <h3 class="section-title">文字種バランス</h3>
-            <div class="ratio-bar" id="ratioBar" title="漢字 / ひらがな / カタカナ / その他">
-              <div id="ratioKanji" class="ratio-seg kanji" style="width: 30%"></div>
-              <div id="ratioHira" class="ratio-seg hira" style="width: 55%"></div>
-              <div id="ratioKata" class="ratio-seg kata" style="width: 10%"></div>
-              <div id="ratioOther" class="ratio-seg other" style="width: 5%"></div>
-            </div>
-            <div class="ratio-legend">
-              <span><i class="dot kanji"></i>漢字 <strong id="pctKanji">0%</strong></span>
-              <span><i class="dot hira"></i>ひら <strong id="pctHira">0%</strong></span>
-              <span><i class="dot kata"></i>カタ <strong id="pctKata">0%</strong></span>
-              <span><i class="dot other"></i>他 <strong id="pctOther">0%</strong></span>
-            </div>
-            <p id="kanjiAdvice" class="helper-text"></p>
-          </div>
-
-          <div class="panel-section">
-            <div class="section-head">
-              <h3 class="section-title">検出された推敲ポイント</h3>
-              <label class="tiny-label" title="長文とみなす文字数">
-                長文
-                <input id="maxSentenceLen" type="number" min="40" max="200" step="10" value="80">字
-              </label>
-            </div>
-            <div id="issueList" class="issue-list"></div>
-          </div>
-        </section>
-
-        <!-- Tab 3: Snapshots -->
-        <section id="tabSnapshots" class="insp-panel hidden">
-          <div class="panel-section">
-            <h3 class="section-title">スナップショット保存</h3>
-            <p class="helper-text">大幅な推敲の前に現在の版を残しておくと、いつでも比較・復元できます。</p>
-            <div class="snap-create-row">
-              <input id="snapshotLabel" type="text" placeholder="例: 初稿完了 / 導入推敲前">
-              <button id="btnSaveSnapshot" class="primary-btn">保存</button>
-            </div>
-          </div>
-          <div class="panel-section">
-            <h3 class="section-title">保存済みの版</h3>
-            <div id="snapshotList" class="snapshot-list"></div>
-          </div>
-        </section>
-      </aside>
-    </div>
-
-    <!-- Mobile Backdrop -->
-    <div id="backdrop" class="backdrop hidden"></div>
-  </div>
-
-  <!-- Template Modal -->
-  <div id="templateModal" class="modal hidden" role="dialog" aria-modal="true" aria-labelledby="templateModalTitle">
-    <div class="modal-card">
-      <div class="modal-header">
-        <h2 id="templateModalTitle">テンプレートから原稿を作成</h2>
-        <button class="icon-btn modal-close" data-close-modal="templateModal" aria-label="閉じる">✕</button>
-      </div>
-      <div class="template-grid" id="templateGrid"></div>
-    </div>
-  </div>
-
-  <!-- Export / Backup Modal -->
-  <div id="exportModal" class="modal hidden" role="dialog" aria-modal="true" aria-labelledby="exportModalTitle">
-    <div class="modal-card">
-      <div class="modal-header">
-        <h2 id="exportModalTitle">書き出し・バックアップ</h2>
-        <button class="icon-btn modal-close" data-close-modal="exportModal" aria-label="閉じる">✕</button>
-      </div>
-      <div class="export-actions">
-        <div class="export-group">
-          <h3>現在の原稿を書き出す</h3>
-          <div class="btn-row">
-            <button id="btnExportMd" class="primary-btn">Markdown (.md)</button>
-            <button id="btnExportTxt" class="secondary-btn">プレーンテキスト (.txt)</button>
-            <button id="btnExportWithContext" class="secondary-btn">文脈メモ付き (.md)</button>
-          </div>
-        </div>
-        <div class="export-group">
-          <h3>全データのバックアップ / 復元</h3>
-          <p class="helper-text">すべての原稿・文脈カード・スナップショットをJSONファイルで保存・復元します。</p>
-          <div class="btn-row">
-            <button id="btnBackupJson" class="secondary-btn">JSONバックアップ保存</button>
-            <label class="secondary-btn file-btn">
-              JSONから復元
-              <input id="inputRestoreJson" type="file" accept=".json,application/json" hidden>
+            </label>
+            <label class="opt-field">
+              <span>出力の文体</span>
+              <select id="optTone">
+                <option value="keep" selected>元の文体を維持</option>
+                <option value="polite">丁寧（です・ます）</option>
+                <option value="casual">親しみやすい話し言葉寄り</option>
+                <option value="dearu">引き締まった「だ・である」</option>
+              </select>
             </label>
           </div>
+
+          <div class="checks-row">
+            <label class="check-item"><input type="checkbox" id="chkSoften" checked> AI定型句・翻訳調をやわらげる</label>
+            <label class="check-item"><input type="checkbox" id="chkMarkdown" checked> 過剰な太字・箇条書きを自然化</label>
+            <label class="check-item"><input type="checkbox" id="chkEndings" checked> 語尾の単調さ・連続を解消</label>
+          </div>
+        </div>
+
+        <!-- Primary Action Buttons -->
+        <div class="action-bar">
+          <button id="btnDetect" class="secondary-btn lg">AI度合いを判定</button>
+          <button id="btnHumanize" class="primary-btn lg">人間らしい文章に変換</button>
+          <button id="btnAiRewrite" class="indigo-btn lg hidden" title="設定したGemini APIで高度な文脈リライトを実行">高度AIリライト</button>
+        </div>
+      </section>
+
+      <!-- Right Column: Detection Dashboard & Humanized Output -->
+      <section class="panel result-panel">
+        <!-- Score Dashboard -->
+        <div class="score-card">
+          <div class="score-main">
+            <div class="gauge-wrap">
+              <svg class="gauge-svg" viewBox="0 0 120 120">
+                <circle class="gauge-bg" cx="60" cy="60" r="50"/>
+                <circle id="gaugeArc" class="gauge-arc" cx="60" cy="60" r="50" stroke-dasharray="314.16" stroke-dashoffset="314.16"/>
+              </svg>
+              <div class="gauge-center">
+                <span id="scoreValue" class="gauge-num">—</span>
+                <span class="gauge-unit">AI度</span>
+              </div>
+            </div>
+
+            <div class="score-info">
+              <div class="score-title-row">
+                <span id="scoreLabel" class="score-badge level-none">判定待ち</span>
+                <span id="scoreDelta" class="delta-badge hidden"></span>
+              </div>
+              <p id="scoreSummary" class="score-summary">左側に文章を入力して「AI度合いを判定」または「人間らしい文章に変換」を押してください。</p>
+              <div class="mini-stats">
+                <span>平均文長: <strong id="statAvgLen">0</strong>字</span>
+                <span>·</span>
+                <span>文長の緩急(CV): <strong id="statBurst">0.00</strong></span>
+                <span>·</span>
+                <span>AI特徴検出: <strong id="statMatches">0</strong>箇所</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- 6 Metrics Bars -->
+          <div class="metrics-grid">
+            <div class="m-item">
+              <div class="m-head"><span>AI定型フレーズ</span><strong id="mPhrase">0%</strong></div>
+              <div class="m-bar"><div id="barPhrase" class="m-fill" style="width:0%"></div></div>
+            </div>
+            <div class="m-item">
+              <div class="m-head"><span>構成の定型化</span><strong id="mStructure">0%</strong></div>
+              <div class="m-bar"><div id="barStructure" class="m-fill" style="width:0%"></div></div>
+            </div>
+            <div class="m-item">
+              <div class="m-head"><span>翻訳調・冗長表現</span><strong id="mTranslation">0%</strong></div>
+              <div class="m-bar"><div id="barTranslation" class="m-fill" style="width:0%"></div></div>
+            </div>
+            <div class="m-item">
+              <div class="m-head"><span>文長の均一性</span><strong id="mUniformity">0%</strong></div>
+              <div class="m-bar"><div id="barUniformity" class="m-fill" style="width:0%"></div></div>
+            </div>
+            <div class="m-item">
+              <div class="m-head"><span>語尾の単調さ</span><strong id="mEnding">0%</strong></div>
+              <div class="m-bar"><div id="barEnding" class="m-fill" style="width:0%"></div></div>
+            </div>
+            <div class="m-item">
+              <div class="m-head"><span>過剰装飾・箇条書</span><strong id="mFormatting">0%</strong></div>
+              <div class="m-bar"><div id="barFormatting" class="m-fill" style="width:0%"></div></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Output Tabs -->
+        <div class="output-card">
+          <div class="output-tabs" role="tablist">
+            <button class="out-tab active" data-tab="humanized" role="tab" aria-selected="true">変換後の文章</button>
+            <button class="out-tab" data-tab="highlight" role="tab" aria-selected="false">AI箇所ハイライト</button>
+            <button class="out-tab" data-tab="diff" role="tab" aria-selected="false">差分比較</button>
+            <button class="out-tab" data-tab="changes" role="tab" aria-selected="false">変更点 <span id="changeCount" class="mini-badge">0</span></button>
+          </div>
+
+          <!-- Tab: Humanized Result -->
+          <div id="paneHumanized" class="out-pane">
+            <textarea id="outputText" class="text-area output-area" placeholder="「人間らしい文章に変換」を押すと、ここに自然な日本語へリライトされた文章が表示されます。そのまま手直しもできます。"></textarea>
+            <div class="output-footer">
+              <span id="afterScoreText" class="after-score">変換後のAI度: —</span>
+              <div class="output-actions">
+                <button id="btnRetryVariant" class="tiny-btn" title="別の言い換えパターンで再変換">別パターン</button>
+                <button id="btnApplyToInput" class="tiny-btn" title="変換結果を入力欄へ戻して再判定">入力へ戻す</button>
+                <button id="btnDownloadTxt" class="tiny-btn">保存(.txt)</button>
+                <button id="btnCopyOutput" class="primary-btn sm">コピー</button>
+              </div>
+            </div>
+          </div>
+
+          <!-- Tab: AI Highlight -->
+          <div id="paneHighlight" class="out-pane hidden">
+            <div class="legend-row">
+              <span><mark class="hl-high">強いAI特徴</mark></span>
+              <span><mark class="hl-mid">中程度のAI特徴</mark></span>
+              <span><mark class="hl-low">軽度の傾向</mark></span>
+              <span class="hint">※色付き部分にカーソルを合わせると理由を表示</span>
+            </div>
+            <div id="highlightBox" class="rich-box">判定を実行すると、AIらしい表現が色分け表示されます。</div>
+          </div>
+
+          <!-- Tab: Diff -->
+          <div id="paneDiff" class="out-pane hidden">
+            <div class="legend-row">
+              <span><del class="diff-del">削除・元の表現</del></span>
+              <span><ins class="diff-ins">変換後の自然な表現</ins></span>
+            </div>
+            <div id="diffBox" class="rich-box">変換を実行すると、Before / After の差分が表示されます。</div>
+          </div>
+
+          <!-- Tab: Changes -->
+          <div id="paneChanges" class="out-pane hidden">
+            <ul id="changesList" class="changes-list">
+              <li class="empty-msg">まだ変換履歴がありません。</li>
+            </ul>
+          </div>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <!-- History Drawer Modal -->
+  <div id="historyModal" class="modal hidden" role="dialog" aria-modal="true" aria-labelledby="historyModalTitle">
+    <div class="modal-card">
+      <div class="modal-head">
+        <h3 id="historyModalTitle">判定・変換履歴</h3>
+        <div class="modal-head-actions">
+          <button id="btnClearHistory" class="tiny-btn danger">すべて削除</button>
+          <button class="icon-btn" data-close="historyModal" aria-label="閉じる">✕</button>
+        </div>
+      </div>
+      <div id="historyList" class="history-list"></div>
+    </div>
+  </div>
+
+  <!-- Optional API Settings Modal -->
+  <div id="apiModal" class="modal hidden" role="dialog" aria-modal="true" aria-labelledby="apiModalTitle">
+    <div class="modal-card">
+      <div class="modal-head">
+        <h3 id="apiModalTitle">高度なAIリライト設定（任意）</h3>
+        <button class="icon-btn" data-close="apiModal" aria-label="閉じる">✕</button>
+      </div>
+      <div class="modal-body">
+        <p class="helper-text">
+          基本のAI判定＆自然文変換は<strong>APIキー不要・完全オフライン</strong>で動作します。<br>
+          さらに高度な文脈リライトを使いたい場合のみ、ご自身の Gemini API キーを設定してください（キーはお使いのブラウザの localStorage のみに保存され、外部サーバーへ保存されません）。
+        </p>
+        <label class="opt-field">
+          <span>Gemini API キー（任意）</span>
+          <input id="inputApiKey" type="password" placeholder="AIza...">
+        </label>
+        <div class="modal-footer-btns">
+          <button id="btnRemoveApiKey" class="secondary-btn">キーを削除</button>
+          <button id="btnSaveApiKey" class="primary-btn">保存する</button>
         </div>
       </div>
     </div>
   </div>
 
-  <!-- Toast -->
   <div id="toast" class="toast hidden" role="status" aria-live="polite"></div>
 
   <script src="./analyzer.js"></script>
