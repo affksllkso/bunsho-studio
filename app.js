@@ -98,6 +98,9 @@
     outDiffPane: $('outDiffPane'),
     outChangesPane: $('outChangesPane'),
     historyContainer: $('historyContainer'),
+    profileDropZone: $('profileDropZone'),
+    profFileInput: $('profFileInput'),
+    profUploadBtnText: $('profUploadBtnText'),
     profName: $('profName'),
     profSamplesWrap: $('profSamplesWrap'),
     profileList: $('profileList'),
@@ -654,20 +657,115 @@
       showToast('履歴をすべて削除しました');
     });
 
-    // Profiles
+    // Profiles: add sample field & Word/PDF file import
+    const createProfileSampleItem = (idx) => {
+      const wrap = document.createElement('div');
+      wrap.className = 'ctrl-field prof-sample-item';
+      wrap.innerHTML = `
+        <div class="prof-sample-head">
+          <span>自作文 ${idx} <em class="prof-file-tag hidden"></em></span>
+          <label class="text-btn file-upload-btn">
+            ファイル読込
+            <input class="prof-single-file" type="file" accept=".docx,.pdf,.txt,.md,.doc" hidden>
+          </label>
+        </div>
+        <textarea class="prof-sample-input" rows="4" placeholder="追加のサンプル文章（Word / PDF 対応）"></textarea>
+      `;
+      bindSingleProfileFileInput(wrap);
+      return wrap;
+    };
+
+    const bindSingleProfileFileInput = (itemEl) => {
+      const input = itemEl.querySelector('.prof-single-file');
+      const textarea = itemEl.querySelector('.prof-sample-input');
+      const tag = itemEl.querySelector('.prof-file-tag');
+      if (!input || !textarea) return;
+      input.addEventListener('change', async (e) => {
+        const file = e.target.files?.[0];
+        if (!file) return;
+        try {
+          const res = await window.BunshoImporter.readFileAsText(file);
+          textarea.value = res.text;
+          if (tag) {
+            tag.textContent = `${res.fileName} (${res.fileType})`;
+            tag.classList.remove('hidden');
+          }
+          showToast(`自作文に「${res.fileName}」を読み込みました`);
+        } catch (err) {
+          showToast(err.message || 'ファイルの読み込みに失敗しました');
+        } finally {
+          input.value = '';
+        }
+      });
+    };
+
+    el.profSamplesWrap.querySelectorAll('.prof-sample-item').forEach(bindSingleProfileFileInput);
+
+    const handleProfileBatchFiles = async (fileList) => {
+      const files = Array.from(fileList || []);
+      if (files.length === 0) return;
+      const origText = el.profUploadBtnText.textContent;
+      el.profUploadBtnText.textContent = '読み込み中…';
+      let loadedCount = 0;
+
+      for (const file of files) {
+        try {
+          const res = await window.BunshoImporter.readFileAsText(file);
+          // 空の自作文欄を探し、なければ新規追加
+          let targetItem = Array.from(el.profSamplesWrap.querySelectorAll('.prof-sample-item'))
+            .find((it) => !it.querySelector('.prof-sample-input').value.trim());
+          if (!targetItem) {
+            const nextIdx = el.profSamplesWrap.querySelectorAll('.prof-sample-item').length + 1;
+            targetItem = createProfileSampleItem(nextIdx);
+            el.profSamplesWrap.appendChild(targetItem);
+          }
+          targetItem.querySelector('.prof-sample-input').value = res.text;
+          const tag = targetItem.querySelector('.prof-file-tag');
+          if (tag) {
+            tag.textContent = `${res.fileName} (${res.fileType})`;
+            tag.classList.remove('hidden');
+          }
+          loadedCount++;
+        } catch (err) {
+          showToast(`${file.name}: ${err.message || '読み込み失敗'}`);
+        }
+      }
+
+      el.profUploadBtnText.textContent = origText;
+      el.profFileInput.value = '';
+      if (loadedCount > 0) {
+        showToast(`${loadedCount}件のファイルを自作文として読み込みました`);
+      }
+    };
+
+    el.profFileInput.addEventListener('change', (e) => handleProfileBatchFiles(e.target.files));
+
+    ['dragenter', 'dragover'].forEach((ev) => {
+      el.profileDropZone.addEventListener(ev, (e) => {
+        e.preventDefault();
+        el.profileDropZone.classList.add('drag-over');
+      });
+    });
+    ['dragleave', 'drop'].forEach((ev) => {
+      el.profileDropZone.addEventListener(ev, (e) => {
+        e.preventDefault();
+        el.profileDropZone.classList.remove('drag-over');
+      });
+    });
+    el.profileDropZone.addEventListener('drop', (e) => {
+      if (e.dataTransfer?.files?.length) handleProfileBatchFiles(e.dataTransfer.files);
+    });
+
     $('btnAddSampleField').addEventListener('click', () => {
-      const idx = el.profSamplesWrap.querySelectorAll('.prof-sample-input').length + 1;
-      const label = document.createElement('label');
-      label.className = 'ctrl-field';
-      label.innerHTML = `<span>自作文 ${idx}</span><textarea class="prof-sample-input" rows="4" placeholder="追加のサンプル文章"></textarea>`;
-      el.profSamplesWrap.appendChild(label);
+      const idx = el.profSamplesWrap.querySelectorAll('.prof-sample-item').length + 1;
+      el.profSamplesWrap.appendChild(createProfileSampleItem(idx));
     });
 
     $('btnSaveProfile').addEventListener('click', () => {
       const name = el.profName.value.trim() || `マイ文体 ${profiles.length + 1}`;
       const samples = Array.from(el.profSamplesWrap.querySelectorAll('.prof-sample-input')).map((t) => t.value.trim()).filter(Boolean);
       if (samples.length === 0) {
-        showToast('自作文を1つ以上入力してください');
+        showToast('自作文を1つ以上入力するか、Word / PDF を読み込んでください');
         return;
       }
       const analyzed = window.BunshoEngine.analyzeProfileSamples(samples);
@@ -675,6 +773,7 @@
       saveProfiles();
       el.profName.value = '';
       el.profSamplesWrap.querySelectorAll('.prof-sample-input').forEach((t) => { t.value = ''; });
+      el.profSamplesWrap.querySelectorAll('.prof-file-tag').forEach((t) => { t.textContent = ''; t.classList.add('hidden'); });
       renderProfiles();
       showToast(`文体プロファイル「${name}」を保存しました`);
     });

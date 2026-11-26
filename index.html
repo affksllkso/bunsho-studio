@@ -392,24 +392,44 @@
         </div>
 
         <div class="two-col-grid">
-          <section class="card">
+          <section class="card" id="profileDropZone">
             <div class="card-head">
               <h2>プロファイルを作成</h2>
+              <label class="outline-btn sm file-upload-btn" title="Word (.docx) / PDF (.pdf) / テキスト (.txt, .md) を複数選択して自作文として読み込み">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+                <span id="profUploadBtnText">Word / PDF を読み込む</span>
+                <input id="profFileInput" type="file" accept=".docx,.pdf,.txt,.md,.doc" multiple hidden>
+              </label>
             </div>
             <div class="profile-form">
               <label class="ctrl-field">
                 <span>プロファイル名</span>
                 <input id="profName" type="text" placeholder="例: 大学レポート用（自分の文体）">
               </label>
+              <div class="prof-drop-banner">
+                過去の自作文ファイル（Word <code>.docx</code> / PDF <code>.pdf</code> / テキスト）をここにドラッグ＆ドロップ、または右上のボタンから複数まとめて読み込めます。
+              </div>
               <div id="profSamplesWrap" class="prof-samples">
-                <label class="ctrl-field">
-                  <span>自作文 1</span>
-                  <textarea class="prof-sample-input" rows="4" placeholder="過去に自分で書いたレポートや文章を貼り付けてください"></textarea>
-                </label>
-                <label class="ctrl-field">
-                  <span>自作文 2</span>
-                  <textarea class="prof-sample-input" rows="4" placeholder="2つ目のサンプル（任意）"></textarea>
-                </label>
+                <div class="ctrl-field prof-sample-item">
+                  <div class="prof-sample-head">
+                    <span>自作文 1 <em class="prof-file-tag hidden"></em></span>
+                    <label class="text-btn file-upload-btn">
+                      ファイル読込
+                      <input class="prof-single-file" type="file" accept=".docx,.pdf,.txt,.md,.doc" hidden>
+                    </label>
+                  </div>
+                  <textarea class="prof-sample-input" rows="4" placeholder="過去に自分で書いたレポートや文章を貼り付けるか、Word / PDF を読み込んでください"></textarea>
+                </div>
+                <div class="ctrl-field prof-sample-item">
+                  <div class="prof-sample-head">
+                    <span>自作文 2 <em class="prof-file-tag hidden"></em></span>
+                    <label class="text-btn file-upload-btn">
+                      ファイル読込
+                      <input class="prof-single-file" type="file" accept=".docx,.pdf,.txt,.md,.doc" hidden>
+                    </label>
+                  </div>
+                  <textarea class="prof-sample-input" rows="4" placeholder="2つ目のサンプル（任意・Word / PDF 対応）"></textarea>
+                </div>
               </div>
               <div class="card-actions">
                 <button id="btnAddSampleField" class="outline-btn">自作文を追加</button>

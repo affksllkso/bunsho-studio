@@ -862,6 +862,40 @@ mark.selected { outline: 2px solid var(--text-main); }
 
 .profile-form, .prof-samples, .profile-list { display: flex; flex-direction: column; gap: 12px; }
 
+.prof-drop-banner {
+  background: var(--bg-inset);
+  border: 1px dashed var(--border-strong);
+  border-radius: 9px;
+  padding: 9px 12px;
+  font-size: 12px;
+  color: var(--text-sub);
+  line-height: 1.55;
+}
+
+.prof-drop-banner code {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 11px;
+  color: var(--accent);
+}
+
+.prof-sample-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+}
+
+.prof-file-tag {
+  font-style: normal;
+  font-size: 11px;
+  font-weight: 600;
+  padding: 1px 7px;
+  margin-left: 6px;
+  border-radius: 999px;
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+
 /* Modals & Toast */
 .modal {
   position: fixed;

@@ -1,4 +1,4 @@
-const CACHE_NAME = 'bunsho-studio-v5';
+const CACHE_NAME = 'bunsho-studio-v6';
 const ASSETS = [
   './',
   './index.html',
