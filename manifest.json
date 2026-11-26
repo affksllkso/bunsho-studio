@@ -1,0 +1,30 @@
+{
+  "name": "文脈工房 — Bunsho Studio",
+  "short_name": "文脈工房",
+  "description": "文脈を設計し、言葉を磨く日本語ライティング＆推敲PWA",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#F7F4EE",
+  "theme_color": "#1E293B",
+  "lang": "ja",
+  "icons": [
+    {
+      "src": "./icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "./icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "./icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml"
+    }
+  ]
+}

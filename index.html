@@ -1,0 +1,317 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <meta name="theme-color" content="#1E293B">
+  <meta name="description" content="文脈を設計し、言葉を磨く日本語ライティング＆推敲PWA">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <title>文脈工房 — Bunsho Studio</title>
+  <link rel="manifest" href="./manifest.json">
+  <link rel="icon" href="./icon.svg" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="./icon-192.png">
+  <link rel="stylesheet" href="./styles.css">
+</head>
+<body>
+  <div id="app" class="app-shell">
+    <!-- Top Header -->
+    <header class="topbar">
+      <div class="topbar-left">
+        <button id="btnToggleSidebar" class="icon-btn" title="文書一覧を開閉" aria-label="文書一覧を開閉">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
+        </button>
+        <div class="brand">
+          <span class="brand-mark" aria-hidden="true">文</span>
+          <div class="brand-text">
+            <span class="brand-name">文脈工房</span>
+            <span class="brand-sub">Bunsho Studio</span>
+          </div>
+        </div>
+        <span id="saveIndicator" class="save-badge" aria-live="polite">保存済み</span>
+      </div>
+
+      <div class="topbar-center">
+        <div class="mode-switch" role="tablist" aria-label="表示モード">
+          <button id="modeEdit" class="mode-btn active" data-mode="edit" role="tab" aria-selected="true">執筆</button>
+          <button id="modePreview" class="mode-btn" data-mode="preview" role="tab" aria-selected="false">横プレビュー</button>
+          <button id="modeVertical" class="mode-btn" data-mode="vertical" role="tab" aria-selected="false">縦書き</button>
+        </div>
+      </div>
+
+      <div class="topbar-right">
+        <button id="btnInstallPwa" class="pill-btn accent hidden" title="アプリをインストール">インストール</button>
+        <button id="btnFocusMode" class="icon-btn" title="集中モード (Ctrl+Shift+F)" aria-label="集中モード切替">
+          <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3"/></svg>
+        </button>
+        <button id="btnTheme" class="icon-btn" title="テーマ切替（生成り / 夜更け）" aria-label="テーマ切替">
+          <svg id="iconSun" class="hidden" width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg>
+          <svg id="iconMoon" width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
+        </button>
+        <button id="btnExportMenu" class="icon-btn" title="書き出し・バックアップ" aria-label="書き出し・バックアップ">
+          <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+        </button>
+        <button id="btnToggleInspector" class="icon-btn active" title="文脈・推敲パネルを開閉" aria-label="文脈・推敲パネルを開閉">
+          <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><line x1="15" y1="3" x2="15" y2="21"/></svg>
+        </button>
+      </div>
+    </header>
+
+    <!-- Main 3-Pane Workspace -->
+    <div class="workspace">
+      <!-- Left Sidebar: Document Library -->
+      <aside id="sidebar" class="sidebar" aria-label="文書一覧">
+        <div class="sidebar-header">
+          <button id="btnNewDoc" class="primary-btn full-width">＋ 新しい原稿</button>
+          <button id="btnTemplateModal" class="secondary-btn" title="テンプレートから作成">雛形</button>
+        </div>
+        <div class="sidebar-search">
+          <input id="docSearch" type="search" placeholder="タイトル・本文・タグを検索..." aria-label="文書を検索">
+          <select id="docCategoryFilter" aria-label="カテゴリ絞り込み">
+            <option value="all">すべて</option>
+            <option value="エッセイ">エッセイ</option>
+            <option value="ブログ">ブログ</option>
+            <option value="ビジネス">ビジネス</option>
+            <option value="企画書">企画書</option>
+            <option value="小説">小説</option>
+            <option value="メモ">メモ</option>
+          </select>
+        </div>
+        <ul id="docList" class="doc-list"></ul>
+        <div class="sidebar-footer">
+          <span id="docCountSummary">0件の原稿</span>
+          <span class="offline-pill" id="onlineStatus">オンライン</span>
+        </div>
+      </aside>
+
+      <!-- Center: Writing Studio -->
+      <main class="editor-stage">
+        <div class="editor-toolbar" id="editorToolbar">
+          <div class="toolbar-group">
+            <button class="tool-btn" data-insert="heading" title="見出し (## )">H2</button>
+            <button class="tool-btn" data-insert="subheading" title="小見出し (### )">H3</button>
+            <button class="tool-btn" data-insert="bold" title="太字 (**...**)"><strong>B</strong></button>
+            <button class="tool-btn" data-insert="quote" title="引用 (> )">引用</button>
+            <button class="tool-btn" data-insert="list" title="箇条書き (- )">箇条書</button>
+            <button class="tool-btn" data-insert="ruby" title="ルビ (｜漢字《かんじ》)">ルビ</button>
+            <button class="tool-btn" data-insert="hr" title="区切り線">―</button>
+          </div>
+          <div class="toolbar-group right">
+            <select id="docCategory" class="inline-select" aria-label="カテゴリ">
+              <option value="エッセイ">エッセイ</option>
+              <option value="ブログ">ブログ</option>
+              <option value="ビジネス">ビジネス</option>
+              <option value="企画書">企画書</option>
+              <option value="小説">小説</option>
+              <option value="メモ">メモ</option>
+            </select>
+            <button id="btnFontFamily" class="tool-btn" title="書体切替（明朝 / ゴシック）">明朝</button>
+            <button id="btnCopyText" class="tool-btn" title="本文をコピー">コピー</button>
+          </div>
+        </div>
+
+        <div class="paper-container" id="paperContainer">
+          <!-- Edit View -->
+          <div class="paper-sheet" id="editView">
+            <input id="docTitle" class="doc-title-input" type="text" placeholder="無題の原稿" aria-label="原稿タイトル">
+            <div class="context-ribbon" id="contextRibbon">
+              <span class="ribbon-item" id="ribbonAudience">読者: 未設定</span>
+              <span class="ribbon-dot">·</span>
+              <span class="ribbon-item" id="ribbonTone">文体: です・ます</span>
+              <span class="ribbon-dot">·</span>
+              <span class="ribbon-item" id="ribbonGoal">目的: 未設定</span>
+            </div>
+            <textarea id="docBody" class="doc-body-input" placeholder="ここに言葉を紡いでください。&#10;&#10;右パネルの「文脈」で読者・目的・構成ブロックを整えると、ぶれない文章が書けます。" spellcheck="false"></textarea>
+          </div>
+
+          <!-- Horizontal Preview View -->
+          <article class="paper-sheet preview-sheet hidden" id="previewView"></article>
+
+          <!-- Vertical Preview View -->
+          <div class="vertical-stage hidden" id="verticalView">
+            <article class="vertical-sheet" id="verticalSheet"></article>
+          </div>
+        </div>
+
+        <!-- Bottom Metrics Bar -->
+        <footer class="metrics-bar">
+          <div class="metrics-left">
+            <span class="metric"><strong id="metricChars">0</strong> 文字</span>
+            <span class="metric-sep">/</span>
+            <span class="metric" title="空白・改行を除いた文字数">正味 <strong id="metricNetChars">0</strong></span>
+            <span class="metric-sep">·</span>
+            <span class="metric">400字詰 <strong id="metricManuscript">0.0</strong> 枚</span>
+            <span class="metric-sep">·</span>
+            <span class="metric">約 <strong id="metricReadTime">1</strong> 分</span>
+            <span class="metric-sep">·</span>
+            <span class="metric"><strong id="metricSentences">0</strong> 文</span>
+          </div>
+          <div class="metrics-right">
+            <label class="target-wrap" title="目標文字数">
+              目標
+              <input id="targetCharsInput" type="number" min="0" step="100" value="1200" aria-label="目標文字数">
+            </label>
+            <div class="progress-track" aria-label="目標達成率">
+              <div id="targetProgressFill" class="progress-fill" style="width: 0%"></div>
+            </div>
+            <span id="targetPercent" class="metric-pct">0%</span>
+          </div>
+        </footer>
+      </main>
+
+      <!-- Right Panel: Context / Proofread / Snapshots -->
+      <aside id="inspector" class="inspector" aria-label="文脈・推敲パネル">
+        <div class="inspector-tabs" role="tablist">
+          <button class="insp-tab active" data-tab="context" role="tab" aria-selected="true">文脈設計</button>
+          <button class="insp-tab" data-tab="proofread" role="tab" aria-selected="false">
+            推敲 <span id="issueCountBadge" class="badge-count">0</span>
+          </button>
+          <button class="insp-tab" data-tab="snapshots" role="tab" aria-selected="false">版管理</button>
+        </div>
+
+        <!-- Tab 1: Context Design -->
+        <section id="tabContext" class="insp-panel active">
+          <div class="panel-section">
+            <h3 class="section-title">文脈カード</h3>
+            <div class="field-group">
+              <label for="ctxAudience">想定読者（誰に届けるか）</label>
+              <input id="ctxAudience" type="text" placeholder="例: 企画立案に悩む20〜30代のビジネスパーソン">
+            </div>
+            <div class="field-group">
+              <label for="ctxGoal">目的（読了後の変化）</label>
+              <input id="ctxGoal" type="text" placeholder="例: 構成メモから書き始める習慣を試したくなる">
+            </div>
+            <div class="field-group">
+              <label for="ctxTone">文体・トーン</label>
+              <select id="ctxTone">
+                <option value="desu-masu">敬体（です・ます）</option>
+                <option value="da-dearu">常体（だ・である）</option>
+                <option value="free">自由（混在を許容）</option>
+              </select>
+            </div>
+            <div class="field-group">
+              <label for="ctxCore">核となるメッセージ（一文要約）</label>
+              <textarea id="ctxCore" rows="2" placeholder="この文章で一番伝えたいことを一文で"></textarea>
+            </div>
+          </div>
+
+          <div class="panel-section">
+            <div class="section-head">
+              <h3 class="section-title">構成ブロック</h3>
+              <button id="btnAddBlock" class="tiny-btn">＋ 追加</button>
+            </div>
+            <div id="outlineList" class="outline-list"></div>
+          </div>
+
+          <div class="panel-section">
+            <div class="section-head">
+              <h3 class="section-title">表記ルール（カスタム辞書）</h3>
+              <button id="btnAddRule" class="tiny-btn">＋ 追加</button>
+            </div>
+            <p class="helper-text">本文内で「誤・旧表記」を自動検出し、ワンクリックで統一できます。</p>
+            <div id="customRuleList" class="rule-list"></div>
+          </div>
+        </section>
+
+        <!-- Tab 2: Proofread / Analyzer -->
+        <section id="tabProofread" class="insp-panel hidden">
+          <div class="panel-section">
+            <h3 class="section-title">文字種バランス</h3>
+            <div class="ratio-bar" id="ratioBar" title="漢字 / ひらがな / カタカナ / その他">
+              <div id="ratioKanji" class="ratio-seg kanji" style="width: 30%"></div>
+              <div id="ratioHira" class="ratio-seg hira" style="width: 55%"></div>
+              <div id="ratioKata" class="ratio-seg kata" style="width: 10%"></div>
+              <div id="ratioOther" class="ratio-seg other" style="width: 5%"></div>
+            </div>
+            <div class="ratio-legend">
+              <span><i class="dot kanji"></i>漢字 <strong id="pctKanji">0%</strong></span>
+              <span><i class="dot hira"></i>ひら <strong id="pctHira">0%</strong></span>
+              <span><i class="dot kata"></i>カタ <strong id="pctKata">0%</strong></span>
+              <span><i class="dot other"></i>他 <strong id="pctOther">0%</strong></span>
+            </div>
+            <p id="kanjiAdvice" class="helper-text"></p>
+          </div>
+
+          <div class="panel-section">
+            <div class="section-head">
+              <h3 class="section-title">検出された推敲ポイント</h3>
+              <label class="tiny-label" title="長文とみなす文字数">
+                長文
+                <input id="maxSentenceLen" type="number" min="40" max="200" step="10" value="80">字
+              </label>
+            </div>
+            <div id="issueList" class="issue-list"></div>
+          </div>
+        </section>
+
+        <!-- Tab 3: Snapshots -->
+        <section id="tabSnapshots" class="insp-panel hidden">
+          <div class="panel-section">
+            <h3 class="section-title">スナップショット保存</h3>
+            <p class="helper-text">大幅な推敲の前に現在の版を残しておくと、いつでも比較・復元できます。</p>
+            <div class="snap-create-row">
+              <input id="snapshotLabel" type="text" placeholder="例: 初稿完了 / 導入推敲前">
+              <button id="btnSaveSnapshot" class="primary-btn">保存</button>
+            </div>
+          </div>
+          <div class="panel-section">
+            <h3 class="section-title">保存済みの版</h3>
+            <div id="snapshotList" class="snapshot-list"></div>
+          </div>
+        </section>
+      </aside>
+    </div>
+
+    <!-- Mobile Backdrop -->
+    <div id="backdrop" class="backdrop hidden"></div>
+  </div>
+
+  <!-- Template Modal -->
+  <div id="templateModal" class="modal hidden" role="dialog" aria-modal="true" aria-labelledby="templateModalTitle">
+    <div class="modal-card">
+      <div class="modal-header">
+        <h2 id="templateModalTitle">テンプレートから原稿を作成</h2>
+        <button class="icon-btn modal-close" data-close-modal="templateModal" aria-label="閉じる">✕</button>
+      </div>
+      <div class="template-grid" id="templateGrid"></div>
+    </div>
+  </div>
+
+  <!-- Export / Backup Modal -->
+  <div id="exportModal" class="modal hidden" role="dialog" aria-modal="true" aria-labelledby="exportModalTitle">
+    <div class="modal-card">
+      <div class="modal-header">
+        <h2 id="exportModalTitle">書き出し・バックアップ</h2>
+        <button class="icon-btn modal-close" data-close-modal="exportModal" aria-label="閉じる">✕</button>
+      </div>
+      <div class="export-actions">
+        <div class="export-group">
+          <h3>現在の原稿を書き出す</h3>
+          <div class="btn-row">
+            <button id="btnExportMd" class="primary-btn">Markdown (.md)</button>
+            <button id="btnExportTxt" class="secondary-btn">プレーンテキスト (.txt)</button>
+            <button id="btnExportWithContext" class="secondary-btn">文脈メモ付き (.md)</button>
+          </div>
+        </div>
+        <div class="export-group">
+          <h3>全データのバックアップ / 復元</h3>
+          <p class="helper-text">すべての原稿・文脈カード・スナップショットをJSONファイルで保存・復元します。</p>
+          <div class="btn-row">
+            <button id="btnBackupJson" class="secondary-btn">JSONバックアップ保存</button>
+            <label class="secondary-btn file-btn">
+              JSONから復元
+              <input id="inputRestoreJson" type="file" accept=".json,application/json" hidden>
+            </label>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Toast -->
+  <div id="toast" class="toast hidden" role="status" aria-live="polite"></div>
+
+  <script src="./analyzer.js"></script>
+  <script src="./app.js"></script>
+</body>
+</html>
