@@ -80,7 +80,7 @@
   let history = [];
   let profiles = [];
   let trainedModels = [];
-  let mlSettings = { mode: 'hybrid', activeVersion: '' };
+  let mlSettings = { mode: 'hybrid', activeVersion: '', disabledByUser: false };
   let lastDetection = null;
   let variantSeed = 0;
   let deferredInstallPrompt = null;
@@ -896,7 +896,78 @@
     });
   }
 
-  // Trained Models (TRAINING LAB Integration + IndexedDB Version Store)
+  // Trained Models (TRAINING LAB Integration + Built-in v1 + IndexedDB Version Store)
+  function getBuiltinModelEntries() {
+    const rawList = Array.isArray(window.BUNSHO_DEFAULT_MODELS) ? window.BUNSHO_DEFAULT_MODELS : [];
+    const out = [];
+    for (const item of rawList) {
+      if (!item || !item.model) continue;
+      try {
+        const meta = window.BunshoEngine.validateTrainedModel(item.model);
+        out.push({
+          version: meta.version,
+          memo: item.memo || meta.version,
+          builtin: true,
+          evalNote: item.evalNote || '',
+          importedAt: item.importedAt || 0,
+          featureCount: meta.featureCount,
+          threshold: meta.threshold,
+          bias: meta.bias,
+          model: {
+            format: meta.format,
+            version: meta.version,
+            threshold: meta.threshold,
+            bias: meta.bias,
+            features: item.model.features
+          }
+        });
+      } catch {}
+    }
+    return out;
+  }
+
+  function mergeWithBuiltinModels(storedList) {
+    const builtins = getBuiltinModelEntries();
+    const builtinMap = new Map(builtins.map((b) => [b.version, b]));
+    const seen = new Set();
+    const merged = [];
+
+    for (const item of storedList) {
+      if (!item || !item.model || !item.version || seen.has(item.version)) continue;
+      try {
+        const meta = window.BunshoEngine.validateTrainedModel(item.model);
+        const baseBuiltin = builtinMap.get(meta.version);
+        merged.push({
+          version: meta.version,
+          memo: item.memo || baseBuiltin?.memo || meta.version,
+          builtin: Boolean(baseBuiltin),
+          evalNote: item.evalNote || baseBuiltin?.evalNote || '',
+          importedAt: item.importedAt || baseBuiltin?.importedAt || 0,
+          featureCount: meta.featureCount,
+          threshold: meta.threshold,
+          bias: meta.bias,
+          model: {
+            format: meta.format,
+            version: meta.version,
+            threshold: meta.threshold,
+            bias: meta.bias,
+            features: item.model.features
+          }
+        });
+        seen.add(meta.version);
+      } catch {}
+    }
+
+    for (const b of builtins) {
+      if (!seen.has(b.version)) {
+        merged.push(b);
+        seen.add(b.version);
+      }
+    }
+
+    return merged.sort((a, b) => (b.importedAt || 0) - (a.importedAt || 0));
+  }
+
   function openModelDb() {
     return new Promise((resolve, reject) => {
       if (typeof indexedDB === 'undefined') return reject(new Error('no-idb'));
@@ -940,7 +1011,7 @@
       });
     } catch {
       try {
-        const list = trainedModels.slice(0, 5);
+        const list = trainedModels.filter((m) => !m.builtin).slice(0, 5);
         localStorage.setItem(ML_FALLBACK_KEY, JSON.stringify(list));
       } catch {}
     }
@@ -957,7 +1028,7 @@
       });
     } catch {
       try {
-        localStorage.setItem(ML_FALLBACK_KEY, JSON.stringify(trainedModels.slice(0, 5)));
+        localStorage.setItem(ML_FALLBACK_KEY, JSON.stringify(trainedModels.filter((m) => !m.builtin).slice(0, 5)));
       } catch {}
     }
   }
@@ -967,6 +1038,7 @@
       const parsed = JSON.parse(localStorage.getItem(ML_SETTINGS_KEY) || '{}');
       if (['hybrid', 'ml', 'rule'].includes(parsed.mode)) mlSettings.mode = parsed.mode;
       if (typeof parsed.activeVersion === 'string') mlSettings.activeVersion = parsed.activeVersion;
+      mlSettings.disabledByUser = parsed.disabledByUser === true;
     } catch {}
   }
 
@@ -1010,11 +1082,19 @@
 
   async function initTrainedModels() {
     loadMlSettings();
+    trainedModels = mergeWithBuiltinModels([]);
+    if (!mlSettings.disabledByUser && (!mlSettings.activeVersion || !trainedModels.some((m) => m.version === mlSettings.activeVersion))) {
+      mlSettings.activeVersion = trainedModels[0]?.version || '';
+    }
+    syncMlModeUi();
+    renderModelVersions();
+    refreshCurrentEvaluation();
+
     const loaded = await readAllStoredModels();
-    trainedModels = loaded
-      .filter((item) => item && item.model && item.version)
-      .sort((a, b) => (b.importedAt || 0) - (a.importedAt || 0));
-    if (mlSettings.activeVersion && !trainedModels.some((m) => m.version === mlSettings.activeVersion)) {
+    trainedModels = mergeWithBuiltinModels(loaded);
+    if (mlSettings.disabledByUser) {
+      mlSettings.activeVersion = '';
+    } else if (!mlSettings.activeVersion || !trainedModels.some((m) => m.version === mlSettings.activeVersion)) {
       mlSettings.activeVersion = trainedModels[0]?.version || '';
       saveMlSettings();
     }
@@ -1066,6 +1146,7 @@
       await saveStoredModelEntry(entry);
 
       mlSettings.activeVersion = entry.version;
+      mlSettings.disabledByUser = false;
       saveMlSettings();
       el.modelMemoInput.value = '';
       syncMlModeUi();
@@ -1105,16 +1186,18 @@
           ${isActive ? '<span class="verdict-pill">使用中</span>' : ''}
         </div>
         <div class="tag-cloud">
+          ${item.builtin ? '<span class="stat-tag human-gram">標準搭載</span>' : ''}
           <span class="stat-tag">特徴量: ${item.featureCount.toLocaleString()}件</span>
           <span class="stat-tag">しきい値: ${threshPct}%</span>
-          <span class="stat-tag">取込: ${stamp}</span>
+          <span class="stat-tag">${item.builtin ? '初回学習: 2026/11/28' : `取込: ${stamp}`}</span>
         </div>
+        ${item.evalNote ? `<div class="provider-note">${esc(item.evalNote)}</div>` : ''}
         <div class="model-card-actions">
           ${isActive
             ? '<button type="button" class="outline-btn sm" data-deactivate-model="1">一時オフ</button>'
             : `<button type="button" class="primary-btn xs" data-activate-model="${esc(item.version)}">このモデルを使用（復元）</button>`}
           <button type="button" class="text-btn" data-export-model="${esc(item.version)}">JSON出力</button>
-          <button type="button" class="text-btn" data-delete-model="${esc(item.version)}">削除</button>
+          ${item.builtin ? '' : `<button type="button" class="text-btn" data-delete-model="${esc(item.version)}">削除</button>`}
         </div>
       `;
 
@@ -1122,6 +1205,7 @@
       if (btnAct) {
         btnAct.addEventListener('click', () => {
           mlSettings.activeVersion = item.version;
+          mlSettings.disabledByUser = false;
           saveMlSettings();
           renderModelVersions();
           refreshCurrentEvaluation();
@@ -1132,6 +1216,7 @@
       if (btnDeact) {
         btnDeact.addEventListener('click', () => {
           mlSettings.activeVersion = '';
+          mlSettings.disabledByUser = true;
           saveMlSettings();
           renderModelVersions();
           refreshCurrentEvaluation();
@@ -1142,17 +1227,21 @@
         downloadBlob(`${item.version}.json`, JSON.stringify(item.model), 'application/json;charset=utf-8');
         showToast('モデルJSONを書き出しました');
       });
-      card.querySelector('[data-delete-model]').addEventListener('click', async () => {
-        trainedModels = trainedModels.filter((m) => m.version !== item.version);
-        await deleteStoredModelEntry(item.version);
-        if (mlSettings.activeVersion === item.version) {
-          mlSettings.activeVersion = trainedModels[0]?.version || '';
-          saveMlSettings();
-        }
-        renderModelVersions();
-        refreshCurrentEvaluation();
-        showToast('保存済みモデルを削除しました');
-      });
+      const btnDel = card.querySelector('[data-delete-model]');
+      if (btnDel) {
+        btnDel.addEventListener('click', async () => {
+          trainedModels = trainedModels.filter((m) => m.version !== item.version);
+          await deleteStoredModelEntry(item.version);
+          if (mlSettings.activeVersion === item.version) {
+            mlSettings.activeVersion = trainedModels[0]?.version || '';
+            mlSettings.disabledByUser = !mlSettings.activeVersion;
+            saveMlSettings();
+          }
+          renderModelVersions();
+          refreshCurrentEvaluation();
+          showToast('保存済みモデルを削除しました');
+        });
+      }
 
       el.modelVersionList.appendChild(card);
     });
@@ -1464,6 +1553,7 @@
     });
     el.btnDisableModel.addEventListener('click', () => {
       mlSettings.activeVersion = '';
+      mlSettings.disabledByUser = true;
       saveMlSettings();
       renderModelVersions();
       refreshCurrentEvaluation();

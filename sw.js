@@ -1,10 +1,11 @@
-const CACHE_NAME = 'bunsho-studio-v10';
+const CACHE_NAME = 'bunsho-studio-v11';
 const ASSETS = [
   './',
   './index.html',
   './styles.css',
   './file-importer.js',
   './analyzer.js',
+  './default-model.js',
   './app.js',
   './manifest.json?v=4',
   './icon.svg?v=4',
