@@ -802,11 +802,243 @@
     return out.join('');
   }
 
+  const MODEL_FORMAT = 'script-lab-char-tfidf-v1';
+  const ML_MIN_TEXT = 100;
+  const ML_MAX_TEXT = 20000;
+  const ML_MAX_FEATURES = 12000;
+  const ML_SPACE = /[\x09-\x0d\x20\x85\xa0\u1680\u2000-\u200a\u2028\u2029\u202f\u205f\u3000\ufeff]+/gu;
+
+  function normalizeForMl(text) {
+    return String(text || '')
+      .normalize('NFKC')
+      .replace(ML_SPACE, ' ')
+      .replace(/^ +| +$/gu, '')
+      .toLowerCase();
+  }
+
+  /**
+   * TRAINING LAB 出力モデル JSON (script-lab-char-tfidf-v1) の検証
+   */
+  function validateTrainedModel(raw) {
+    if (!raw || typeof raw !== 'object' || Array.isArray(raw) || raw.format !== MODEL_FORMAT) {
+      throw new Error('対応する TRAINING LAB のモデルJSON（script-lab-char-tfidf-v1）を選択してください。');
+    }
+    const { bias, threshold, features } = raw;
+    if (typeof bias !== 'number' || !Number.isFinite(bias) || bias < -100 || bias > 100
+        || typeof threshold !== 'number' || !Number.isFinite(threshold) || !(threshold > 0 && threshold < 1)
+        || !features || typeof features !== 'object' || Array.isArray(features)) {
+      throw new Error('モデルのパラメーター（bias / threshold / features）が無効です。');
+    }
+    const entries = Object.entries(features);
+    if (entries.length < 1 || entries.length > ML_MAX_FEATURES) {
+      throw new Error(`モデルの特徴量数が範囲外です（1〜${ML_MAX_FEATURES.toLocaleString()}件）。`);
+    }
+    for (const [term, pair] of entries) {
+      const codeLen = Array.from(term).length;
+      if ((codeLen !== 2 && codeLen !== 3 && codeLen !== 4)
+          || !Array.isArray(pair) || pair.length !== 2
+          || typeof pair[0] !== 'number' || typeof pair[1] !== 'number'
+          || !Number.isFinite(pair[0]) || !Number.isFinite(pair[1])
+          || !(pair[0] > 0 && pair[0] <= 100)
+          || !(pair[1] >= -100 && pair[1] <= 100)) {
+        throw new Error('モデルの特徴量データが無効です。');
+      }
+    }
+    const version = (typeof raw.version === 'string' && raw.version.trim())
+      ? raw.version.trim().slice(0, 160)
+      : `sl-imported-${Date.now()}`;
+    return {
+      version,
+      format: MODEL_FORMAT,
+      threshold,
+      bias,
+      featureCount: entries.length
+    };
+  }
+
+  /**
+   * TRAINING LAB (lab.py / predict.py) と完全同一の文字 2〜4-gram TF-IDF + ロジスティック回帰推論
+   */
+  function predictTrainedModel(text, model) {
+    if (!model) return { state: 'no_model' };
+    validateTrainedModel(model);
+
+    const normalized = normalizeForMl(text);
+    const chars = Array.from(normalized);
+    if (chars.length === 0) {
+      return { state: 'empty', chars: 0, minChars: ML_MIN_TEXT };
+    }
+    if (chars.length > ML_MAX_TEXT) {
+      return {
+        state: 'too_long',
+        chars: chars.length,
+        maxChars: ML_MAX_TEXT
+      };
+    }
+    if (chars.length < ML_MIN_TEXT) {
+      return {
+        state: 'short',
+        chars: chars.length,
+        minChars: ML_MIN_TEXT,
+        version: model.version,
+        threshold: model.threshold,
+        threshold100: Number((model.threshold * 100).toFixed(1))
+      };
+    }
+
+    const gramCounts = new Map();
+    for (const size of [2, 3, 4]) {
+      const limit = chars.length - size;
+      for (let i = 0; i <= limit; i++) {
+        const gram = chars.slice(i, i + size).join('');
+        gramCounts.set(gram, (gramCounts.get(gram) || 0) + 1);
+      }
+    }
+
+    const features = model.features;
+    const hasOwn = Object.prototype.hasOwnProperty;
+    const active = [];
+    let normSq = 0;
+
+    for (const [term, count] of gramCounts.entries()) {
+      if (!hasOwn.call(features, term)) continue;
+      const pair = features[term];
+      const val = (1 + Math.log(count)) * pair[0];
+      normSq += val * val;
+      active.push({ term, count, val, weight: pair[1] });
+    }
+
+    const totalFeatures = Object.keys(features).length;
+    if (normSq === 0 || active.length === 0) {
+      return {
+        state: 'unmatched',
+        chars: chars.length,
+        version: model.version,
+        threshold: model.threshold,
+        threshold100: Number((model.threshold * 100).toFixed(1)),
+        matchedFeatures: 0,
+        totalFeatures
+      };
+    }
+
+    const norm = Math.sqrt(normSq);
+    let linear = model.bias;
+    const contributions = [];
+    for (const item of active) {
+      const unitVal = item.val / norm;
+      const contrib = unitVal * item.weight;
+      linear += contrib;
+      contributions.push({ term: item.term, count: item.count, contrib });
+    }
+
+    const clamped = Math.max(-60, Math.min(60, linear));
+    const probability = 1 / (1 + Math.exp(-clamped));
+    const score100 = Math.round(probability * 100);
+    const threshold100 = Number((model.threshold * 100).toFixed(1));
+    const aiLike = probability >= model.threshold;
+
+    const topAiTerms = contributions
+      .filter((c) => c.contrib > 0.005)
+      .sort((a, b) => b.contrib - a.contrib)
+      .slice(0, 6)
+      .map((c) => ({ term: c.term, count: c.count, impact: Number((c.contrib * 100).toFixed(1)) }));
+
+    const topHumanTerms = contributions
+      .filter((c) => c.contrib < -0.005)
+      .sort((a, b) => a.contrib - b.contrib)
+      .slice(0, 6)
+      .map((c) => ({ term: c.term, count: c.count, impact: Number((Math.abs(c.contrib) * 100).toFixed(1)) }));
+
+    return {
+      state: 'scored',
+      chars: chars.length,
+      version: model.version,
+      probability,
+      score100,
+      threshold: model.threshold,
+      threshold100,
+      aiLike,
+      matchedFeatures: active.length,
+      totalFeatures,
+      topAiTerms,
+      topHumanTerms
+    };
+  }
+
+  /**
+   * ルールベース判定と学習モデル判定の統合評価
+   * mode: 'hybrid' (50:50併用) | 'ml' (学習モデル優先) | 'rule' (ルール単体＋比較表示)
+   */
+  function evaluateCombined(text, trainedModel, mode) {
+    const ruleRes = detectAI(text);
+    const activeMode = mode || 'hybrid';
+    if (!trainedModel || !String(text || '').trim()) {
+      return Object.assign({}, ruleRes, {
+        ruleScore: ruleRes.score,
+        mode: activeMode,
+        ml: trainedModel ? { state: 'empty', version: trainedModel.version } : { state: 'no_model' }
+      });
+    }
+
+    const mlRes = predictTrainedModel(text, trainedModel);
+    let finalScore = ruleRes.score;
+    if (mlRes.state === 'scored') {
+      if (activeMode === 'ml') {
+        finalScore = mlRes.score100;
+      } else if (activeMode === 'hybrid') {
+        finalScore = Math.max(1, Math.min(99, Math.round(ruleRes.score * 0.5 + mlRes.score100 * 0.5)));
+      }
+    }
+
+    let label = ruleRes.label;
+    let level = ruleRes.level;
+    let summary = ruleRes.summary;
+
+    if (mlRes.state === 'scored' && activeMode !== 'rule') {
+      const modeTag = activeMode === 'ml' ? '学習モデル判定' : 'ルール＋学習モデル併用';
+      if (activeMode === 'ml') {
+        if (mlRes.aiLike && finalScore >= 70) {
+          label = 'AI文体の傾向が強い';
+          level = 'high';
+        } else if (mlRes.aiLike) {
+          label = 'AI文体の傾向あり（しきい値以上）';
+          level = 'mid';
+        } else if (finalScore >= 35) {
+          label = '軽度のAI類似傾向（しきい値未満）';
+          level = 'low';
+        } else {
+          label = '人間執筆に近い文体';
+          level = 'human';
+        }
+      } else {
+        if (finalScore >= 70) { label = 'AI文体の特徴が強い'; level = 'high'; }
+        else if (finalScore >= 45) { label = 'ややAI文体の傾向あり'; level = 'mid'; }
+        else if (finalScore >= 25) { label = '軽度の定型傾向'; level = 'low'; }
+        else { label = '自然な文体'; level = 'human'; }
+      }
+      summary = `${modeTag}（ルール ${ruleRes.score} / 学習モデル ${mlRes.score100}%・しきい値 ${mlRes.threshold100}%）で集計しました。`;
+    }
+
+    return Object.assign({}, ruleRes, {
+      score: finalScore,
+      ruleScore: ruleRes.score,
+      label,
+      level,
+      summary,
+      mode: activeMode,
+      ml: mlRes
+    });
+  }
+
   global.BunshoEngine = {
     detectAI,
+    analyze: detectAI,
+    validateTrainedModel,
+    predictTrainedModel,
+    evaluateCombined,
     humanize,
     analyzeProfileSamples,
     buildHighlightHtml,
     buildDiffHtml
   };
-})(window);
+})(typeof globalThis !== 'undefined' ? globalThis : window);

@@ -82,6 +82,11 @@
           <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
           <span>文体プロファイル</span>
         </button>
+        <button class="nav-item" data-view="models">
+          <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="12 2 2 7 12 12 22 7 12 2"/><polyline points="2 17 12 22 22 17"/><polyline points="2 12 12 17 22 12"/></svg>
+          <span>学習モデル</span>
+          <span id="navModelBadge" class="nav-pill">未連携</span>
+        </button>
       </nav>
 
       <div class="sidebar-bottom">
@@ -195,10 +200,12 @@
           <section class="card check-card">
             <div class="card-head">
               <h2>AI文体チェック</h2>
+              <button id="btnOpenModelsQuick" type="button" class="outline-btn sm" title="TRAINING LAB の学習モデルを連携・切替">モデル連携</button>
             </div>
 
             <div class="underline-tabs" role="tablist" aria-label="分析レポートの表示">
               <button class="u-tab active" data-report-tab="result" role="tab" aria-selected="true">検出結果</button>
+              <button class="u-tab" data-report-tab="ml" role="tab" aria-selected="false">学習モデル</button>
               <button class="u-tab" data-report-tab="stats" role="tab" aria-selected="false">文章の統計</button>
             </div>
 
@@ -217,10 +224,21 @@
                 </div>
                 <div class="score-meta">
                   <div class="score-heading-row">
-                    <h3>AI文体特徴スコア</h3>
+                    <h3 id="scoreHeadingTitle">AI文体特徴スコア</h3>
                     <span id="scoreStatusPill" class="verdict-pill">チェック待ち</span>
                   </div>
                   <p id="scoreCaption" class="score-caption">AIの下書きにも現れる定型表現や反復を集計します。</p>
+                </div>
+              </div>
+
+              <div id="mlSummaryBar" class="ml-summary-bar">
+                <div class="ml-summary-row">
+                  <span id="mlSummaryTitle" class="ml-summary-title">TRAINING LAB 学習モデル</span>
+                  <span id="mlSummaryBadge" class="ml-verdict-badge">未連携</span>
+                </div>
+                <div class="ml-summary-sub">
+                  <span id="mlSummaryDetail">モデルJSONを読み込むと、ルール判定と比較・併用できます。</span>
+                  <button id="btnJumpModels" type="button" class="text-btn">設定・読込 &rsaquo;</button>
                 </div>
               </div>
 
@@ -254,6 +272,58 @@
               <button id="btnViewHighlights" class="card-footer-link">
                 <span>特徴を本文で確認</span>
                 <span class="footer-link-count"><strong id="footerMatchCount">0</strong> 件 &rsaquo;</span>
+              </button>
+            </div>
+
+            <!-- Trained Model (ML) Tab -->
+            <div id="reportMlPane" class="report-pane hidden">
+              <div class="ml-summary-bar">
+                <div class="ml-summary-row">
+                  <strong id="mlPaneModelName">モデル未設定</strong>
+                  <span id="mlPaneVerdict" class="ml-verdict-badge">未連携</span>
+                </div>
+                <span id="mlPaneVersion" class="model-version-code">TRAINING LAB で出力したモデルJSON（script-lab-char-tfidf-v1）を読み込んでください。</span>
+              </div>
+
+              <div class="stat-block">
+                <h4>スコア反映モード</h4>
+                <div class="ml-mode-group" role="group" aria-label="判定モード切替">
+                  <button type="button" class="ml-mode-btn active" data-ml-mode="hybrid">併用（ルール＋学習）</button>
+                  <button type="button" class="ml-mode-btn" data-ml-mode="ml">学習モデル優先</button>
+                  <button type="button" class="ml-mode-btn" data-ml-mode="rule">ルールのみ（比較）</button>
+                </div>
+              </div>
+
+              <div class="stats-grid">
+                <div class="stat-tile"><span>学習モデル類似度</span><strong id="mlStProb">—</strong></div>
+                <div class="stat-tile"><span>判定しきい値</span><strong id="mlStThreshold">—</strong></div>
+                <div class="stat-tile"><span>ルール単体スコア</span><strong id="mlStRuleScore">0 / 100</strong></div>
+              </div>
+
+              <div class="stat-block">
+                <div class="meter-head">
+                  <span>類似度ゲージ（白線＝しきい値）</span>
+                  <span id="mlStMatched">一致特徴量: —</span>
+                </div>
+                <div class="ml-threshold-track">
+                  <div id="mlProbBar" class="ml-threshold-fill fill-indigo" style="width:0%"></div>
+                  <div id="mlThresholdMarker" class="ml-threshold-marker hidden" style="left:50%"></div>
+                </div>
+              </div>
+
+              <div class="stat-block">
+                <h4>AI側の根拠となった文字パターン（n-gram）</h4>
+                <div id="mlTopAiGrams" class="tag-cloud"><span class="stat-tag">モデル読込後に100字以上の原稿で表示</span></div>
+              </div>
+
+              <div class="stat-block">
+                <h4>人間執筆側の根拠となった文字パターン（n-gram）</h4>
+                <div id="mlTopHumanGrams" class="tag-cloud"><span class="stat-tag">モデル読込後に100字以上の原稿で表示</span></div>
+              </div>
+
+              <button id="btnOpenModelManagerFromTab" type="button" class="card-footer-link">
+                <span>学習モデルの追加・バージョン切替</span>
+                <span class="footer-link-count">&rsaquo;</span>
               </button>
             </div>
 
@@ -448,6 +518,68 @@
           </section>
         </div>
       </main>
+
+      <!-- View 4: Trained Models (TRAINING LAB 学習モデル連携) -->
+      <main id="viewModels" class="workspace hidden">
+        <div class="hero-row">
+          <div>
+            <h1>学習モデル連携（TRAINING LAB）</h1>
+            <p class="hero-desc">TRAINING LAB で学習・出力した軽量モデル（<code>.json</code>）を読み込み、ブラウザー内で高速・オフライン推論します。</p>
+          </div>
+          <div class="hero-actions">
+            <a href="https://affksllkso.github.io/training-lab/" target="_blank" rel="noopener noreferrer" class="outline-btn" style="text-decoration:none;">TRAINING LAB を開く &#8599;</a>
+          </div>
+        </div>
+
+        <div class="two-col-grid">
+          <section class="card" id="modelDropZone">
+            <div class="card-head">
+              <h2>モデルJSONを取り込む</h2>
+              <label class="outline-btn sm file-upload-btn" title="TRAINING LAB で保存した sl-*.json を選択">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+                <span id="modelUploadBtnText">モデルJSONを選択</span>
+                <input id="modelFileInput" type="file" accept=".json,application/json" hidden>
+              </label>
+            </div>
+
+            <div class="profile-form">
+              <label class="ctrl-field">
+                <span>表示メモ（任意・バージョン識別用）</span>
+                <input id="modelMemoInput" type="text" maxlength="80" placeholder="例: Gemini 4 Hydrogen + GPT 学習モデル">
+              </label>
+
+              <div class="prof-drop-banner">
+                TRAINING LAB の「<strong>モデルJSONを保存</strong>」で書き出した <code>sl-*.json</code>（<code>script-lab-char-tfidf-v1</code> 形式）をここにドラッグ＆ドロップ、または右上のボタンから読み込めます。<br>
+                推論はお使いの端末内（iPhone / iPad / Windows ブラウザー）で完結し、API料金やPCの常時起動は不要です。
+              </div>
+
+              <div class="ctrl-field">
+                <span>判定への反映モード</span>
+                <div class="ml-mode-group" role="group" aria-label="判定への反映モード">
+                  <button type="button" class="ml-mode-btn active" data-ml-mode="hybrid">併用（ルール＋学習）</button>
+                  <button type="button" class="ml-mode-btn" data-ml-mode="ml">学習モデル優先</button>
+                  <button type="button" class="ml-mode-btn" data-ml-mode="rule">ルールのみ（比較）</button>
+                </div>
+              </div>
+              <p id="mlModeExplain" class="provider-note">
+                併用モード：100字以上の原稿でルールベース判定（50%）と学習モデル類似度（50%）を統合し、両方の内訳を並べて表示します。
+              </p>
+
+              <div class="disclaimer-box">
+                精度改善が確認できたモデルのみを採用し、誤判定が増えた場合は右の一覧から前のバージョンへいつでも戻せます。スコアは文体傾向の参考値であり、執筆者の特定や不正行為の判断には使えません。
+              </div>
+            </div>
+          </section>
+
+          <section class="card">
+            <div class="card-head">
+              <h2>保存済みモデル（バージョン管理）</h2>
+              <button id="btnDisableModel" type="button" class="text-btn hidden">モデル連携を一時オフ</button>
+            </div>
+            <div id="modelVersionList" class="profile-list"></div>
+          </section>
+        </div>
+      </main>
     </div>
   </div>
 
@@ -467,6 +599,7 @@
           <li><strong>AI文体をチェック</strong>：5つの指標（定型表現・接続詞・文末の反復・文長の特徴・文章構成）でスコア化し、本文ハイライトで理由を確認できます。</li>
           <li><strong>自然な文章に整える</strong>：文体プリセットや変更度を選んでリライトを実行。オフラインでも即座に自然な日本語へ整え、差分比較・Word/テキスト出力ができます。</li>
           <li><strong>文体プロファイル</strong>：過去の自作文を登録しておくと、「自分の文体」プリセットで文体傾向を反映できます。</li>
+          <li><strong>学習モデル連携</strong>：TRAINING LAB で学習したモデルJSON（<code>sl-*.json</code>）を読み込むと、ルール判定と機械学習推論の比較・併用やバージョン切替ができます。</li>
         </ol>
       </div>
       <div class="modal-foot">

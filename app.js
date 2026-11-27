@@ -10,6 +10,11 @@
   const THEME_KEY = 'bunsho_kotobane_theme';
   const LEGACY_GEMINI_KEY = 'bunsho_gemini_api_key';
   const AI_CONFIG_KEY = 'scriptlab_ai_config_v1';
+  const ML_SETTINGS_KEY = 'scriptlab_ml_settings_v1';
+  const ML_FALLBACK_KEY = 'scriptlab_ml_models_fallback_v1';
+  const ML_DB_NAME = 'scriptlab_models_db_v1';
+  const ML_STORE = 'models';
+  const MAX_SAVED_MODELS = 20;
 
   const AI_PROVIDERS = {
     gemini: {
@@ -74,6 +79,8 @@
 
   let history = [];
   let profiles = [];
+  let trainedModels = [];
+  let mlSettings = { mode: 'hybrid', activeVersion: '' };
   let lastDetection = null;
   let variantSeed = 0;
   let deferredInstallPrompt = null;
@@ -86,9 +93,11 @@
     crumbCurrent: $('crumbCurrent'),
     onlineLabel: $('onlineLabel'),
     navHistoryCount: $('navHistoryCount'),
+    navModelBadge: $('navModelBadge'),
     viewStudio: $('viewStudio'),
     viewHistory: $('viewHistory'),
     viewProfiles: $('viewProfiles'),
+    viewModels: $('viewModels'),
     dropZone: $('dropZone'),
     fileInput: $('fileInput'),
     uploadBtnText: $('uploadBtnText'),
@@ -101,11 +110,34 @@
     highlightCanvas: $('highlightCanvas'),
     highlightReasonBox: $('highlightReasonBox'),
     reportResultPane: $('reportResultPane'),
+    reportMlPane: $('reportMlPane'),
     reportStatsPane: $('reportStatsPane'),
     scoreRing: $('scoreRing'),
     scoreNum: $('scoreNum'),
+    scoreHeadingTitle: $('scoreHeadingTitle'),
     scoreStatusPill: $('scoreStatusPill'),
     scoreCaption: $('scoreCaption'),
+    mlSummaryTitle: $('mlSummaryTitle'),
+    mlSummaryBadge: $('mlSummaryBadge'),
+    mlSummaryDetail: $('mlSummaryDetail'),
+    mlPaneModelName: $('mlPaneModelName'),
+    mlPaneVerdict: $('mlPaneVerdict'),
+    mlPaneVersion: $('mlPaneVersion'),
+    mlStProb: $('mlStProb'),
+    mlStThreshold: $('mlStThreshold'),
+    mlStRuleScore: $('mlStRuleScore'),
+    mlStMatched: $('mlStMatched'),
+    mlProbBar: $('mlProbBar'),
+    mlThresholdMarker: $('mlThresholdMarker'),
+    mlTopAiGrams: $('mlTopAiGrams'),
+    mlTopHumanGrams: $('mlTopHumanGrams'),
+    modelDropZone: $('modelDropZone'),
+    modelFileInput: $('modelFileInput'),
+    modelUploadBtnText: $('modelUploadBtnText'),
+    modelMemoInput: $('modelMemoInput'),
+    mlModeExplain: $('mlModeExplain'),
+    btnDisableModel: $('btnDisableModel'),
+    modelVersionList: $('modelVersionList'),
     valPhrase: $('valPhrase'),
     valConj: $('valConj'),
     valEnd: $('valEnd'),
@@ -189,8 +221,14 @@
     el.viewStudio.classList.toggle('hidden', view !== 'studio');
     el.viewHistory.classList.toggle('hidden', view !== 'history');
     el.viewProfiles.classList.toggle('hidden', view !== 'profiles');
+    el.viewModels.classList.toggle('hidden', view !== 'models');
 
-    const titles = { studio: '文章スタジオ', history: '履歴', profiles: '文体プロファイル' };
+    const titles = {
+      studio: '文章スタジオ',
+      history: '履歴',
+      profiles: '文体プロファイル',
+      models: '学習モデル連携'
+    };
     el.crumbCurrent.textContent = titles[view] || '文章スタジオ';
 
     document.querySelectorAll('.nav-item').forEach((n) => {
@@ -199,6 +237,7 @@
 
     if (view === 'history') renderHistory();
     if (view === 'profiles') renderProfiles();
+    if (view === 'models') renderModelVersions();
     closeMobileSidebar();
   }
 
@@ -225,6 +264,7 @@
       b.setAttribute('aria-selected', String(active));
     });
     el.reportResultPane.classList.toggle('hidden', tab !== 'result');
+    el.reportMlPane.classList.toggle('hidden', tab !== 'ml');
     el.reportStatsPane.classList.toggle('hidden', tab !== 'stats');
   }
 
@@ -244,6 +284,104 @@
     el.charCountLabel.textContent = `${chars.toLocaleString()} 字`;
   }
 
+  function getActiveModelEntry() {
+    if (!mlSettings.activeVersion) return null;
+    return trainedModels.find((m) => m.version === mlSettings.activeVersion) || null;
+  }
+
+  function evaluateText(text) {
+    const entry = getActiveModelEntry();
+    return window.BunshoEngine.evaluateCombined(text, entry ? entry.model : null, mlSettings.mode);
+  }
+
+  function renderMlPanels(res) {
+    const activeEntry = getActiveModelEntry();
+    const ml = res.ml || { state: 'no_model' };
+    const ruleScore = typeof res.ruleScore === 'number' ? res.ruleScore : res.score;
+
+    const headingMap = {
+      hybrid: '総合AI文体スコア（併用）',
+      ml: 'AI類似傾向スコア（学習モデル）',
+      rule: 'AI文体特徴スコア'
+    };
+    el.scoreHeadingTitle.textContent = (activeEntry && ml.state === 'scored')
+      ? (headingMap[mlSettings.mode] || 'AI文体特徴スコア')
+      : 'AI文体特徴スコア';
+
+    el.mlStRuleScore.textContent = `${ruleScore} / 100`;
+
+    if (!activeEntry) {
+      el.mlSummaryTitle.textContent = 'TRAINING LAB 学習モデル';
+      el.mlSummaryBadge.className = 'ml-verdict-badge';
+      el.mlSummaryBadge.textContent = '未連携';
+      el.mlSummaryDetail.textContent = 'モデルJSONを読み込むと、ルール判定と比較・併用できます。';
+
+      el.mlPaneModelName.textContent = 'モデル未設定';
+      el.mlPaneVerdict.className = 'ml-verdict-badge';
+      el.mlPaneVerdict.textContent = '未連携';
+      el.mlPaneVersion.textContent = 'TRAINING LAB で出力したモデルJSON（script-lab-char-tfidf-v1）を読み込んでください。';
+      el.mlStProb.textContent = '—';
+      el.mlStThreshold.textContent = '—';
+      el.mlStMatched.textContent = '一致特徴量: —';
+      el.mlProbBar.style.width = '0%';
+      el.mlThresholdMarker.classList.add('hidden');
+      el.mlTopAiGrams.innerHTML = '<span class="stat-tag">モデル未読み込み</span>';
+      el.mlTopHumanGrams.innerHTML = '<span class="stat-tag">モデル未読み込み</span>';
+      return;
+    }
+
+    const displayName = activeEntry.memo || activeEntry.version;
+    const threshPct = Number((activeEntry.threshold * 100).toFixed(1));
+    el.mlSummaryTitle.textContent = `学習モデル: ${displayName}`;
+    el.mlPaneModelName.textContent = displayName;
+    el.mlPaneVersion.textContent = `${activeEntry.version}（特徴量 ${activeEntry.featureCount.toLocaleString()}件・しきい値 ${threshPct}%）`;
+    el.mlStThreshold.textContent = `${threshPct}%`;
+    el.mlThresholdMarker.style.left = `${Math.max(2, Math.min(98, threshPct))}%`;
+    el.mlThresholdMarker.classList.remove('hidden');
+
+    if (ml.state === 'scored') {
+      const probPct = Number((ml.probability * 100).toFixed(1));
+      const badgeCls = ml.aiLike ? 'ml-verdict-badge ai' : 'ml-verdict-badge human';
+      const badgeText = ml.aiLike ? `AI傾向 ${probPct}%（≥${ml.threshold100}%）` : `人間傾向 ${probPct}%（<${ml.threshold100}%）`;
+      el.mlSummaryBadge.className = badgeCls;
+      el.mlSummaryBadge.textContent = badgeText;
+      el.mlSummaryDetail.textContent = `ルール単体: ${ruleScore} / 100 ｜ 学習モデル: ${ml.score100} / 100（一致 ${ml.matchedFeatures.toLocaleString()}語）`;
+
+      el.mlPaneVerdict.className = badgeCls;
+      el.mlPaneVerdict.textContent = ml.aiLike ? 'しきい値以上（AI傾向）' : 'しきい値未満（人間傾向）';
+      el.mlStProb.textContent = `${probPct}%`;
+      el.mlStMatched.textContent = `一致特徴量: ${ml.matchedFeatures.toLocaleString()} / ${ml.totalFeatures.toLocaleString()}`;
+      el.mlProbBar.style.width = `${Math.max(1, Math.min(100, probPct))}%`;
+      el.mlProbBar.className = 'ml-threshold-fill ' + (ml.aiLike ? 'fill-rose' : 'fill-emerald');
+
+      el.mlTopAiGrams.innerHTML = ml.topAiTerms.length
+        ? ml.topAiTerms.map((g) => `<span class="stat-tag ai-gram">「${esc(g.term)}」×${g.count} (+${g.impact})</span>`).join('')
+        : '<span class="stat-tag">顕著なAI寄りパターンなし</span>';
+
+      el.mlTopHumanGrams.innerHTML = ml.topHumanTerms.length
+        ? ml.topHumanTerms.map((g) => `<span class="stat-tag human-gram">「${esc(g.term)}」×${g.count} (-${g.impact})</span>`).join('')
+        : '<span class="stat-tag">顕著な人間寄りパターンなし</span>';
+    } else {
+      const reasonMap = {
+        empty: '原稿を入力すると学習モデルでも推論します。',
+        short: `100字未満（現在 ${ml.chars || 0}字）のため学習モデル判定は保留し、ルール判定のみ表示しています。`,
+        too_long: '20,000字を超えているため学習モデル判定の対象外です。',
+        unmatched: '学習モデルの特徴量と一致する文字パターンがありませんでした。'
+      };
+      el.mlSummaryBadge.className = 'ml-verdict-badge pending';
+      el.mlSummaryBadge.textContent = ml.state === 'empty' ? '待機中' : '判定保留';
+      el.mlSummaryDetail.textContent = reasonMap[ml.state] || '判定保留';
+
+      el.mlPaneVerdict.className = 'ml-verdict-badge pending';
+      el.mlPaneVerdict.textContent = ml.state === 'empty' ? '原稿待ち' : '保留';
+      el.mlStProb.textContent = '保留';
+      el.mlStMatched.textContent = '一致特徴量: —';
+      el.mlProbBar.style.width = '0%';
+      el.mlTopAiGrams.innerHTML = `<span class="stat-tag">${esc(reasonMap[ml.state] || '100字以上で表示')}</span>`;
+      el.mlTopHumanGrams.innerHTML = `<span class="stat-tag">${esc(reasonMap[ml.state] || '100字以上で表示')}</span>`;
+    }
+  }
+
   // Detection & Stats Rendering
   function renderDetection(res) {
     lastDetection = res;
@@ -255,6 +393,7 @@
     el.scoreNum.textContent = String(res.score);
     el.scoreStatusPill.textContent = res.label;
     el.scoreCaption.textContent = res.summary;
+    renderMlPanels(res);
 
     const c = res.categories;
     el.valPhrase.textContent = c.phrase;
@@ -325,10 +464,20 @@
       if (!silent) showToast('チェックする原稿を入力するか、ファイルを読み込んでください');
       return null;
     }
-    const res = window.BunshoEngine.detectAI(text);
+    const res = evaluateText(text);
     renderDetection(res);
-    if (!silent) showToast(`AI文体チェック完了：スコア ${res.score} / 100（検出 ${res.matches.length} 件）`);
+    if (!silent) {
+      const mlTag = res.ml?.state === 'scored' ? `・学習モデル ${res.ml.score100}%` : '';
+      showToast(`AI文体チェック完了：スコア ${res.score} / 100（検出 ${res.matches.length} 件${mlTag}）`);
+    }
     return res;
+  }
+
+  function formatAfterCaption(prefix, beforeRes, afterRes) {
+    const mlCompare = (beforeRes.ml?.state === 'scored' && afterRes.ml?.state === 'scored')
+      ? ` ｜ 学習モデル ${beforeRes.ml.score100}% → ${afterRes.ml.score100}%`
+      : '';
+    return `${prefix}: ${afterRes.score} / 100（変換前 ${beforeRes.score}${mlCompare}）`;
   }
 
   function runRewrite(bumpSeed) {
@@ -339,7 +488,7 @@
     }
     if (bumpSeed) variantSeed++;
 
-    const beforeRes = window.BunshoEngine.detectAI(text);
+    const beforeRes = evaluateText(text);
     renderDetection(beforeRes);
 
     const activeProfile = profiles.length > 0 ? profiles[0] : null;
@@ -354,14 +503,14 @@
     });
 
     el.outputText.value = converted.text;
-    const afterRes = window.BunshoEngine.detectAI(converted.text);
+    const afterRes = evaluateText(converted.text);
 
     const diffPt = afterRes.score - beforeRes.score;
     el.rewriteDeltaBadge.textContent = diffPt < 0
       ? `スコア ${beforeRes.score} → ${afterRes.score}（${diffPt}pt改善）`
       : `スコア ${beforeRes.score} → ${afterRes.score}`;
     el.rewriteDeltaBadge.classList.remove('hidden');
-    el.afterScoreCaption.textContent = `変換後のAI文体スコア: ${afterRes.score} / 100（変換前 ${beforeRes.score}）`;
+    el.afterScoreCaption.textContent = formatAfterCaption('変換後のAI文体スコア', beforeRes, afterRes);
 
     el.diffCanvas.innerHTML = window.BunshoEngine.buildDiffHtml(text, converted.text);
     el.changeCountBadge.textContent = converted.changes.length;
@@ -539,7 +688,7 @@
       return;
     }
 
-    const beforeRes = window.BunshoEngine.detectAI(text);
+    const beforeRes = evaluateText(text);
     el.btnAiRewrite.disabled = true;
     el.btnAiRewrite.textContent = `${pName} でリライト中…`;
 
@@ -549,13 +698,13 @@
       if (!rewritten) throw new Error('応答が空でした');
 
       el.outputText.value = rewritten;
-      const afterRes = window.BunshoEngine.detectAI(rewritten);
+      const afterRes = evaluateText(rewritten);
       const diffPt = afterRes.score - beforeRes.score;
       el.rewriteDeltaBadge.textContent = diffPt < 0
         ? `スコア ${beforeRes.score} → ${afterRes.score}（${diffPt}pt改善）`
         : `スコア ${beforeRes.score} → ${afterRes.score}`;
       el.rewriteDeltaBadge.classList.remove('hidden');
-      el.afterScoreCaption.textContent = `${pName} リライト後のAI文体スコア: ${afterRes.score} / 100（変換前 ${beforeRes.score}）`;
+      el.afterScoreCaption.textContent = formatAfterCaption(`${pName} リライト後のAI文体スコア`, beforeRes, afterRes);
       el.diffCanvas.innerHTML = window.BunshoEngine.buildDiffHtml(text, rewritten);
       el.changeCountBadge.textContent = '1';
       el.changesList.innerHTML = `<li class="change-item"><div class="change-cat">高度AIリライト (${esc(pName)})</div><div>モデル ${esc(model)} を使用して文脈全体をより自然な日本語に整えました。</div></li>`;
@@ -744,6 +893,268 @@
         showToast('プロファイルを削除しました');
       });
       el.profileList.appendChild(div);
+    });
+  }
+
+  // Trained Models (TRAINING LAB Integration + IndexedDB Version Store)
+  function openModelDb() {
+    return new Promise((resolve, reject) => {
+      if (typeof indexedDB === 'undefined') return reject(new Error('no-idb'));
+      const req = indexedDB.open(ML_DB_NAME, 1);
+      req.onupgradeneeded = () => {
+        if (!req.result.objectStoreNames.contains(ML_STORE)) {
+          req.result.createObjectStore(ML_STORE, { keyPath: 'version' });
+        }
+      };
+      req.onsuccess = () => resolve(req.result);
+      req.onerror = () => reject(req.error || new Error('idb-error'));
+    });
+  }
+
+  async function readAllStoredModels() {
+    try {
+      const db = await openModelDb();
+      return await new Promise((resolve, reject) => {
+        const tx = db.transaction(ML_STORE, 'readonly');
+        const req = tx.objectStore(ML_STORE).getAll();
+        req.onsuccess = () => { db.close(); resolve(req.result || []); };
+        req.onerror = () => { db.close(); reject(req.error); };
+      });
+    } catch {
+      try {
+        return JSON.parse(localStorage.getItem(ML_FALLBACK_KEY) || '[]');
+      } catch {
+        return [];
+      }
+    }
+  }
+
+  async function saveStoredModelEntry(entry) {
+    try {
+      const db = await openModelDb();
+      await new Promise((resolve, reject) => {
+        const tx = db.transaction(ML_STORE, 'readwrite');
+        tx.objectStore(ML_STORE).put(entry);
+        tx.oncomplete = () => { db.close(); resolve(); };
+        tx.onerror = () => { db.close(); reject(tx.error); };
+      });
+    } catch {
+      try {
+        const list = trainedModels.slice(0, 5);
+        localStorage.setItem(ML_FALLBACK_KEY, JSON.stringify(list));
+      } catch {}
+    }
+  }
+
+  async function deleteStoredModelEntry(version) {
+    try {
+      const db = await openModelDb();
+      await new Promise((resolve, reject) => {
+        const tx = db.transaction(ML_STORE, 'readwrite');
+        tx.objectStore(ML_STORE).delete(version);
+        tx.oncomplete = () => { db.close(); resolve(); };
+        tx.onerror = () => { db.close(); reject(tx.error); };
+      });
+    } catch {
+      try {
+        localStorage.setItem(ML_FALLBACK_KEY, JSON.stringify(trainedModels.slice(0, 5)));
+      } catch {}
+    }
+  }
+
+  function loadMlSettings() {
+    try {
+      const parsed = JSON.parse(localStorage.getItem(ML_SETTINGS_KEY) || '{}');
+      if (['hybrid', 'ml', 'rule'].includes(parsed.mode)) mlSettings.mode = parsed.mode;
+      if (typeof parsed.activeVersion === 'string') mlSettings.activeVersion = parsed.activeVersion;
+    } catch {}
+  }
+
+  function saveMlSettings() {
+    try {
+      localStorage.setItem(ML_SETTINGS_KEY, JSON.stringify(mlSettings));
+    } catch {}
+  }
+
+  function syncMlModeUi() {
+    document.querySelectorAll('[data-ml-mode]').forEach((btn) => {
+      const active = btn.dataset.mlMode === mlSettings.mode;
+      btn.classList.toggle('active', active);
+      btn.setAttribute('aria-pressed', String(active));
+    });
+    const modeNotes = {
+      hybrid: '併用モード：100字以上の原稿でルールベース判定（50%）と学習モデル類似度（50%）を統合し、両方の内訳を並べて表示します。',
+      ml: '学習モデル優先モード：100字以上の原稿で TRAINING LAB モデルの類似度をメインスコアに表示します（5指標とハイライトも併用可能）。',
+      rule: 'ルールのみ（比較モード）：メインスコアは既存のルール判定のまま維持し、学習モデルの推論結果を比較用に併記します。'
+    };
+    if (el.mlModeExplain) el.mlModeExplain.textContent = modeNotes[mlSettings.mode] || modeNotes.hybrid;
+
+    const activeEntry = getActiveModelEntry();
+    if (el.navModelBadge) {
+      el.navModelBadge.textContent = activeEntry ? '連携中' : (trainedModels.length ? `${trainedModels.length}` : '未連携');
+    }
+    const quickBtn = $('btnOpenModelsQuick');
+    if (quickBtn) {
+      quickBtn.textContent = activeEntry ? 'モデル連携中' : 'モデル連携';
+      quickBtn.classList.toggle('accent-outline', Boolean(activeEntry));
+    }
+    if (el.btnDisableModel) {
+      el.btnDisableModel.classList.toggle('hidden', !activeEntry);
+    }
+  }
+
+  function refreshCurrentEvaluation() {
+    const text = el.inputText.value.trim();
+    renderDetection(evaluateText(text));
+  }
+
+  async function initTrainedModels() {
+    loadMlSettings();
+    const loaded = await readAllStoredModels();
+    trainedModels = loaded
+      .filter((item) => item && item.model && item.version)
+      .sort((a, b) => (b.importedAt || 0) - (a.importedAt || 0));
+    if (mlSettings.activeVersion && !trainedModels.some((m) => m.version === mlSettings.activeVersion)) {
+      mlSettings.activeVersion = trainedModels[0]?.version || '';
+      saveMlSettings();
+    }
+    syncMlModeUi();
+    renderModelVersions();
+    refreshCurrentEvaluation();
+  }
+
+  async function handleModelFileImport(file) {
+    if (!file) return;
+    if (file.size > 5 * 1024 * 1024) {
+      showToast('モデルJSONのサイズは 5MB 以下にしてください');
+      return;
+    }
+    const origLabel = el.modelUploadBtnText.textContent;
+    el.modelUploadBtnText.textContent = '検証中…';
+    try {
+      const rawText = await file.text();
+      let parsed;
+      try {
+        parsed = JSON.parse(rawText);
+      } catch {
+        throw new Error('有効な JSON ファイルではありません。TRAINING LAB の「モデルJSONを保存」で出力したファイルを選択してください。');
+      }
+      const meta = window.BunshoEngine.validateTrainedModel(parsed);
+      const memo = el.modelMemoInput.value.trim() || file.name.replace(/\.json$/i, '');
+      const normalizedModel = {
+        format: meta.format,
+        version: meta.version,
+        threshold: meta.threshold,
+        bias: meta.bias,
+        features: parsed.features
+      };
+      const entry = {
+        version: meta.version,
+        memo,
+        importedAt: Date.now(),
+        featureCount: meta.featureCount,
+        threshold: meta.threshold,
+        bias: meta.bias,
+        model: normalizedModel
+      };
+
+      trainedModels = [entry, ...trainedModels.filter((m) => m.version !== entry.version)];
+      if (trainedModels.length > MAX_SAVED_MODELS) {
+        const overflow = trainedModels.splice(MAX_SAVED_MODELS);
+        for (const old of overflow) await deleteStoredModelEntry(old.version);
+      }
+      await saveStoredModelEntry(entry);
+
+      mlSettings.activeVersion = entry.version;
+      saveMlSettings();
+      el.modelMemoInput.value = '';
+      syncMlModeUi();
+      renderModelVersions();
+      refreshCurrentEvaluation();
+      showToast(`学習モデル「${memo}」（特徴量 ${meta.featureCount.toLocaleString()}件）を適用しました`);
+    } catch (err) {
+      showToast(err.message || 'モデルの読み込みに失敗しました');
+    } finally {
+      el.modelUploadBtnText.textContent = origLabel;
+      el.modelFileInput.value = '';
+    }
+  }
+
+  function renderModelVersions() {
+    syncMlModeUi();
+    if (!el.modelVersionList) return;
+    if (trainedModels.length === 0) {
+      el.modelVersionList.innerHTML = '<div class="empty-note">まだ学習モデルが登録されていません。<br>TRAINING LAB で出力した <code>sl-*.json</code> を左のフォームから読み込んでください。</div>';
+      return;
+    }
+    el.modelVersionList.innerHTML = '';
+    trainedModels.forEach((item) => {
+      const isActive = item.version === mlSettings.activeVersion;
+      const d = new Date(item.importedAt || Date.now());
+      const stamp = `${d.getFullYear()}/${d.getMonth() + 1}/${d.getDate()} ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
+      const threshPct = Number((item.threshold * 100).toFixed(1));
+
+      const card = document.createElement('div');
+      card.className = 'model-card' + (isActive ? ' active-model' : '');
+      card.innerHTML = `
+        <div class="model-card-head">
+          <div>
+            <strong>${esc(item.memo || item.version)}</strong>
+            <div class="model-version-code">${esc(item.version)}</div>
+          </div>
+          ${isActive ? '<span class="verdict-pill">使用中</span>' : ''}
+        </div>
+        <div class="tag-cloud">
+          <span class="stat-tag">特徴量: ${item.featureCount.toLocaleString()}件</span>
+          <span class="stat-tag">しきい値: ${threshPct}%</span>
+          <span class="stat-tag">取込: ${stamp}</span>
+        </div>
+        <div class="model-card-actions">
+          ${isActive
+            ? '<button type="button" class="outline-btn sm" data-deactivate-model="1">一時オフ</button>'
+            : `<button type="button" class="primary-btn xs" data-activate-model="${esc(item.version)}">このモデルを使用（復元）</button>`}
+          <button type="button" class="text-btn" data-export-model="${esc(item.version)}">JSON出力</button>
+          <button type="button" class="text-btn" data-delete-model="${esc(item.version)}">削除</button>
+        </div>
+      `;
+
+      const btnAct = card.querySelector('[data-activate-model]');
+      if (btnAct) {
+        btnAct.addEventListener('click', () => {
+          mlSettings.activeVersion = item.version;
+          saveMlSettings();
+          renderModelVersions();
+          refreshCurrentEvaluation();
+          showToast(`モデル「${item.memo || item.version}」に切り替えました`);
+        });
+      }
+      const btnDeact = card.querySelector('[data-deactivate-model]');
+      if (btnDeact) {
+        btnDeact.addEventListener('click', () => {
+          mlSettings.activeVersion = '';
+          saveMlSettings();
+          renderModelVersions();
+          refreshCurrentEvaluation();
+          showToast('学習モデル連携を一時オフにしました（データは保持されています）');
+        });
+      }
+      card.querySelector('[data-export-model]').addEventListener('click', () => {
+        downloadBlob(`${item.version}.json`, JSON.stringify(item.model), 'application/json;charset=utf-8');
+        showToast('モデルJSONを書き出しました');
+      });
+      card.querySelector('[data-delete-model]').addEventListener('click', async () => {
+        trainedModels = trainedModels.filter((m) => m.version !== item.version);
+        await deleteStoredModelEntry(item.version);
+        if (mlSettings.activeVersion === item.version) {
+          mlSettings.activeVersion = trainedModels[0]?.version || '';
+          saveMlSettings();
+        }
+        renderModelVersions();
+        refreshCurrentEvaluation();
+        showToast('保存済みモデルを削除しました');
+      });
+
+      el.modelVersionList.appendChild(card);
     });
   }
 
@@ -1017,6 +1428,47 @@
 
     $('btnHowTo').addEventListener('click', () => el.howToModal.classList.remove('hidden'));
     $('btnApiSettings').addEventListener('click', () => openApiModal(aiConfig.activeProvider));
+    $('btnOpenModelsQuick').addEventListener('click', () => switchView('models'));
+    $('btnJumpModels').addEventListener('click', () => switchView('models'));
+    $('btnOpenModelManagerFromTab').addEventListener('click', () => switchView('models'));
+
+    document.querySelectorAll('[data-ml-mode]').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        mlSettings.mode = btn.dataset.mlMode;
+        saveMlSettings();
+        syncMlModeUi();
+        refreshCurrentEvaluation();
+        const labelMap = { hybrid: '併用（ルール＋学習）', ml: '学習モデル優先', rule: 'ルールのみ（比較）' };
+        showToast(`判定モードを「${labelMap[mlSettings.mode]}」に変更しました`);
+      });
+    });
+
+    el.modelFileInput.addEventListener('change', (e) => {
+      if (e.target.files && e.target.files[0]) handleModelFileImport(e.target.files[0]);
+    });
+    ['dragenter', 'dragover'].forEach((ev) => {
+      el.modelDropZone.addEventListener(ev, (e) => {
+        e.preventDefault();
+        el.modelDropZone.classList.add('drag-over');
+      });
+    });
+    ['dragleave', 'drop'].forEach((ev) => {
+      el.modelDropZone.addEventListener(ev, (e) => {
+        e.preventDefault();
+        el.modelDropZone.classList.remove('drag-over');
+      });
+    });
+    el.modelDropZone.addEventListener('drop', (e) => {
+      const file = e.dataTransfer?.files?.[0];
+      if (file) handleModelFileImport(file);
+    });
+    el.btnDisableModel.addEventListener('click', () => {
+      mlSettings.activeVersion = '';
+      saveMlSettings();
+      renderModelVersions();
+      refreshCurrentEvaluation();
+      showToast('学習モデル連携を一時オフにしました');
+    });
 
     document.querySelectorAll('.provider-tab').forEach((tab) => {
       tab.addEventListener('click', () => renderApiModalProvider(tab.dataset.provider));
@@ -1089,7 +1541,8 @@
   // 初期表示は空の原稿から開始（必要なときのみ「サンプルを使う」で読込）
   el.inputText.value = '';
   updateCharCount();
-  renderDetection(window.BunshoEngine.detectAI(''));
+  renderDetection(evaluateText(''));
+  initTrainedModels();
 
   // Launch Splash fade-out
   const splash = $('splashScreen');
